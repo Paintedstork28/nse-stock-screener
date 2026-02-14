@@ -138,13 +138,7 @@ def fetch_stock_info() -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 
 def _download_bhavcopy_jugaad(trade_date: dt.date):
-    """Download a single day's bhavcopy using jugaad-data."""
-    try:
-        from jugaad_data.nse import bhavcopy_save, bhavcopy_fo_save
-        from jugaad_data.nse import NSEHistory
-    except ImportError:
-        pass
-
+    """Download a single day's bhavcopy from NSE archives."""
     # Try the direct CSV approach
     url = (
         f"https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_"
@@ -170,15 +164,6 @@ def _download_bhavcopy_jugaad(trade_date: dt.date):
             fname = zf.namelist()[0]
             df = pd.read_csv(zf.open(fname))
             df.columns = df.columns.str.strip()
-            return _normalize_bhavcopy(df, trade_date)
-    except Exception:
-        pass
-
-    # Use jugaad-data library
-    try:
-        from jugaad_data.nse import bhavcopy_raw
-        df = bhavcopy_raw(trade_date)
-        if df is not None and len(df) > 0:
             return _normalize_bhavcopy(df, trade_date)
     except Exception:
         pass
