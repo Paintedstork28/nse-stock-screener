@@ -72,6 +72,31 @@ st.markdown("""
 
 _LOGO_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "logo.png")
 
+def _ensure_logo():
+    if os.path.exists(_LOGO_PATH):
+        return
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+        img = Image.new("RGBA", (120, 120), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        draw.rounded_rectangle([0, 0, 119, 119], radius=20, fill="#1a73e8")
+        try:
+            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 44)
+        except Exception:
+            try:
+                font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 44)
+            except Exception:
+                font = ImageFont.load_default()
+        bbox = draw.textbbox((0, 0), "NSE", font=font)
+        tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+        draw.text(((120 - tw) / 2, (120 - th) / 2 - 5), "NSE", fill="white", font=font)
+        os.makedirs(os.path.dirname(_LOGO_PATH), exist_ok=True)
+        img.save(_LOGO_PATH)
+    except Exception:
+        pass
+
+_ensure_logo()
+
 _logo_col, _title_col = st.columns([0.04, 0.96], gap="small")
 with _logo_col:
     if os.path.exists(_LOGO_PATH):

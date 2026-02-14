@@ -235,7 +235,7 @@ def _normalize_bhavcopy(df: pd.DataFrame, trade_date: dt.date) -> pd.DataFrame:
     return result.dropna(subset=["symbol", "close"])
 
 
-def _download_yfinance_fallback(symbols: list[str], start: dt.date, end: dt.date) -> pd.DataFrame:
+def _download_yfinance_fallback(symbols, start, end):
     """Fallback: use yfinance for a batch of symbols."""
     import yfinance as yf
 

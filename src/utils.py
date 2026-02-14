@@ -121,5 +121,7 @@ SECTOR_INDICES = {
 
 import os as _os
 _PROJECT_ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
-DB_PATH = _os.path.join(_PROJECT_ROOT, "data", "screener.db")
+_DATA_DIR = _os.path.join(_PROJECT_ROOT, "data")
+_os.makedirs(_DATA_DIR, exist_ok=True)
+DB_PATH = _os.path.join(_DATA_DIR, "screener.db")
 LOOKBACK_MONTHS = 6
