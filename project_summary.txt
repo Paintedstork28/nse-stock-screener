@@ -1,0 +1,115 @@
+PROJECT SUMMARY: NSE Stock Screener
+=====================================
+
+1. PROJECT CONCEPT
+-------------------
+A web-based stock screener for all NSE-listed equities (~2,200+ stocks) with 6 months of rolling historical data. Built for a non-tech-savvy serious stock trader — accessible via a simple shareable link, no installation needed. Seven screener tabs cover price drops, consolidation, volume, momentum, smart money signals, sector rotation, and red flags.
+
+2. HOW IT WAS BUILT
+--------------------
+Tech stack:
+- Python 3.11 with Streamlit (web dashboard)
+- Pandas + NumPy (data analysis, indicator computation)
+- Plotly (interactive charts — sector heatmap, FII/DII bar charts)
+- SQLite (local cache database)
+- Requests + yfinance (data fetching)
+- Pillow (logo generation)
+
+Architecture:
+- 12 Python files across src/ modules, each under 300 lines
+- app.py is the Streamlit entry point — renders header, info bar, 7 tabs
+- src/data_fetcher.py handles bhavcopy downloads and SQLite storage
+- src/data_extras.py fetches supplementary data (FII/DII, bulk deals, sectors)
+- src/indicators.py computes all technical indicators from raw OHLCV data
+- src/screener_*.py files contain the screening logic for each tab
+- src/utils.py has date helpers, formatting, constants
+- All indicators computed locally — no paid APIs needed
+
+3. DATABASE STRUCTURE
+---------------------
+SQLite database at data/screener.db with these tables:
+
+ohlcv (symbol, trade_date, open, high, low, close, volume, delivery_qty, delivery_pct)
+  - Primary key: (symbol, trade_date)
+  - ~320,000 rows (2,200 stocks × ~130 trading days)
+
+fii_dii (trade_date, fii_buy, fii_sell, fii_net, dii_buy, dii_sell, dii_net)
+  - Primary key: trade_date
+  - ~30 rows (last 30 days)
+
+bulk_deals (id, trade_date, symbol, client_name, deal_type, quantity, price)
+  - Auto-increment primary key
+
+sector_indices (index_name, trade_date, close)
+  - Primary key: (index_name, trade_date)
+  - ~1,500 rows
+
+promoter_data (symbol, quarter, promoter_holding_pct, pledge_pct, fii_holding_pct, dii_holding_pct, public_holding_pct)
+  - Primary key: (symbol, quarter)
+  - Placeholder — needs NSDL/BSE data source
+
+metadata (key, value)
+  - Stores last_updated timestamp
+
+4. DATA SOURCES
+---------------
+- NSE Bhavcopies (primary): End-of-day OHLCV + delivery data for all stocks
+  URL: nsearchives.nseindia.com/products/content/sec_bhavdata_full_DDMMYYYY.csv
+  Also: nsearchives.nseindia.com/content/historical/EQUITIES/...
+
+- NSE EQUITY_L.csv: Full list of stock symbols and company names
+  URL: nsearchives.nseindia.com/content/equities/EQUITY_L.csv
+
+- Nifty 500 list: Sector/industry classification for top 500 stocks
+  URL: niftyindices.com/IndexConstituent/ind_nifty500list.csv
+
+- Yahoo Finance (via yfinance): Sector index prices, India VIX
+
+- NSE API: FII/DII daily activity, bulk/block deals
+  URL: nseindia.com/api/fiidiiTradeReact, nseindia.com/api/snapshot-capital-market-largedeal
+
+5. APIs & COSTS
+----------------
+- NSE Bhavcopies — FREE, no API key needed. Public CSV files downloaded via HTTP.
+- NSE EQUITY_L.csv — FREE, no API key needed. Public file.
+- Nifty 500 list (niftyindices.com) — FREE, no API key needed. Public CSV.
+- Yahoo Finance (via yfinance library) — FREE, no API key needed. Used for sector indices and India VIX.
+- NSE FII/DII API (nseindia.com/api/fiidiiTradeReact) — FREE, no API key needed. Public JSON endpoint.
+- NSE Bulk Deals API (nseindia.com/api/snapshot-capital-market-largedeal) — FREE, no API key needed. Public JSON endpoint.
+
+Total cost: ₹0 — all data sources are free and publicly available.
+
+6. DATA REFRESH
+---------------
+- Manual refresh via "Refresh Data" button in the app
+- Rolling 6-month window — always covers the most recent ~130 trading days
+- Incremental: only downloads missing dates, not the full history
+- Old data beyond 6 months is auto-deleted on refresh
+- On Streamlit Cloud: database is ephemeral (rebuilds on cold start, takes 3-5 min)
+
+7. DEPLOYMENT
+-------------
+- GitHub repo: https://github.com/Paintedstork28/nse-stock-screener
+- Streamlit Cloud: deployed via share.streamlit.io (check dashboard for live URL)
+- Local: streamlit run app.py (runs at http://localhost:8501)
+
+8. WHAT IT CAN BE USED FOR
+---------------------------
+- Daily screening of NSE stocks across 7 different strategies
+- Identifying oversold value picks (Price Drops + low RSI)
+- Spotting breakout candidates (Sideways Movers + low Bollinger Bandwidth)
+- Finding momentum stocks to ride (Top Momentum)
+- Detecting institutional buying patterns (Big Player Activity)
+- Sector rotation analysis (Sector Map)
+- Risk avoidance — flagging death crosses, speculative rallies, deep downtrends
+
+9. SUGGESTED NEXT STEPS
+------------------------
+- Add promoter pledging data source (NSDL/BSE quarterly filings)
+- Add stock-level detail view — click a symbol to see its price chart + indicators
+- Add email/Telegram alerts when a stock matches a screener for the first time
+- Add watchlist feature — save favourite stocks and track them across tabs
+- Add earnings calendar integration
+- Improve sector coverage beyond Nifty 500 (map all 2,200 stocks to sectors)
+- Add GitHub Actions to auto-refresh data daily (scheduled workflow)
+- Consider caching screener results in SQLite to speed up page loads
