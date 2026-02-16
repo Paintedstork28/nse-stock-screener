@@ -210,16 +210,22 @@ def fetch_promoter_data(force_refresh=False, progress_callback=None) -> pd.DataF
                 progress_callback(1.0, "Promoter data loaded from cache")
             return cached
 
+    if progress_callback:
+        progress_callback(0.08, "Fetching Nifty 500 stock list...")
+
     # Get Nifty 500 symbols only (not all ~2,200 NSE stocks) for speed
     nifty500_syms = set()
     try:
         n500_url = "https://www.niftyindices.com/IndexConstituent/ind_nifty500list.csv"
-        n500_resp = requests.get(n500_url, headers=_NSE_HEADERS, timeout=15)
+        n500_resp = requests.get(n500_url, headers=_NSE_HEADERS, timeout=10)
         if n500_resp.status_code == 200 and len(n500_resp.text) > 200:
             n500_df = pd.read_csv(io.StringIO(n500_resp.text))
             nifty500_syms = set(n500_df["Symbol"].str.strip().tolist())
     except Exception:
         pass
+
+    if progress_callback:
+        progress_callback(0.12, "Querying local database...")
 
     symbols_df = pd.read_sql(
         "SELECT DISTINCT symbol FROM ohlcv ORDER BY symbol", conn
@@ -232,8 +238,11 @@ def fetch_promoter_data(force_refresh=False, progress_callback=None) -> pd.DataF
         ])
 
     all_symbols = symbols_df["symbol"].tolist()
-    # Filter to Nifty 500 if available, else fall back to all
-    symbols = [s for s in all_symbols if s in nifty500_syms] if nifty500_syms else all_symbols
+    # Filter to Nifty 500 if available; if not, cap at 500 most-traded
+    if nifty500_syms:
+        symbols = [s for s in all_symbols if s in nifty500_syms]
+    else:
+        symbols = all_symbols[:500]
 
     # Already-cached symbols (skip unless force_refresh)
     if not force_refresh:
@@ -241,6 +250,16 @@ def fetch_promoter_data(force_refresh=False, progress_callback=None) -> pd.DataF
             pd.read_sql("SELECT DISTINCT symbol FROM promoter_data", conn)["symbol"]
         )
         symbols = [s for s in symbols if s not in cached_syms]
+
+    if progress_callback:
+        progress_callback(0.15, "Connecting to NSE ({} stocks to fetch)...".format(len(symbols)))
+
+    if not symbols:
+        result = pd.read_sql("SELECT * FROM promoter_data", conn)
+        conn.close()
+        if progress_callback:
+            progress_callback(1.0, "Promoter data ready (all cached)")
+        return result
 
     session = _nse_session()
     total = len(symbols)
@@ -288,9 +307,10 @@ def fetch_promoter_data(force_refresh=False, progress_callback=None) -> pd.DataF
             pass
 
         if progress_callback and total > 0:
-            progress_callback((i + 1) / total, f"Fetched {i + 1}/{total} symbols")
+            pct = 0.15 + 0.83 * (i + 1) / total
+            progress_callback(pct, "Fetched {}/{} stocks".format(i + 1, total))
 
-        _time.sleep(0.5)  # Rate-limit
+        _time.sleep(0.3)  # Rate-limit
 
     result = pd.read_sql("SELECT * FROM promoter_data", conn)
     conn.close()

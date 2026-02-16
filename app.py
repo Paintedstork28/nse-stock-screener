@@ -96,12 +96,21 @@ st.markdown("""
         background-color: #2a2a3e;
     }
 
-    /* Progress bar — orange fill on visible grey track */
-    .stProgress > div > div > div {
+    /* Progress bar — orange fill on grey track */
+    .stProgress > div > div > div > div {
         background: linear-gradient(90deg, #ff9f43 0%, #f0932b 100%) !important;
     }
-    .stProgress > div > div {
+    .stProgress > div > div > div {
         background-color: #4a4a5e !important;
+    }
+    .stProgress [data-testid="stProgressBarFigure"] {
+        background: linear-gradient(90deg, #ff9f43 0%, #f0932b 100%) !important;
+    }
+    .stProgress [role="progressbar"] {
+        background-color: #4a4a5e !important;
+    }
+    .stProgress [role="progressbar"] > div {
+        background: linear-gradient(90deg, #ff9f43 0%, #f0932b 100%) !important;
     }
     .loading-label {
         font-size: 0.75rem;
