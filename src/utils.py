@@ -124,4 +124,5 @@ _PROJECT_ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
 _DATA_DIR = _os.path.join(_PROJECT_ROOT, "data")
 _os.makedirs(_DATA_DIR, exist_ok=True)
 DB_PATH = _os.path.join(_DATA_DIR, "screener.db")
+PARQUET_PATH = _os.path.join(_DATA_DIR, "ohlcv_cache.parquet")
 LOOKBACK_MONTHS = 6

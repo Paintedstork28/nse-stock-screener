@@ -8,7 +8,7 @@ import time
 import pandas as pd
 import requests
 
-from src.utils import DB_PATH, LOOKBACK_MONTHS, trading_days_between
+from src.utils import DB_PATH, PARQUET_PATH, LOOKBACK_MONTHS, trading_days_between
 
 # ---------------------------------------------------------------------------
 # SQLite setup
@@ -57,6 +57,60 @@ def _create_tables(conn: sqlite3.Connection):
             value TEXT
         );
     """)
+
+
+# ---------------------------------------------------------------------------
+# Parquet persistent cache
+# ---------------------------------------------------------------------------
+
+def save_ohlcv_parquet(conn):
+    """Save current OHLCV data from SQLite to a Parquet file for fast restore."""
+    try:
+        cutoff = (dt.date.today() - dt.timedelta(days=LOOKBACK_MONTHS * 30 + 15)).isoformat()
+        df = pd.read_sql(
+            "SELECT symbol, trade_date, open, high, low, close, "
+            "volume, delivery_qty, delivery_pct FROM ohlcv WHERE trade_date >= ?",
+            conn, params=(cutoff,)
+        )
+        if not df.empty:
+            import os
+            os.makedirs(os.path.dirname(PARQUET_PATH), exist_ok=True)
+            df.to_parquet(PARQUET_PATH, index=False, engine="pyarrow")
+    except Exception:
+        pass
+
+
+def restore_from_parquet():
+    """If SQLite is empty but parquet cache exists, restore data from parquet.
+
+    Returns the number of rows restored (0 if nothing to restore).
+    """
+    import os
+    if not os.path.exists(PARQUET_PATH):
+        return 0
+
+    conn = get_db()
+    row_count = conn.execute("SELECT COUNT(*) FROM ohlcv").fetchone()[0]
+    if row_count > 0:
+        conn.close()
+        return 0  # SQLite already has data, no need to restore
+
+    try:
+        df = pd.read_parquet(PARQUET_PATH, engine="pyarrow")
+        if not df.empty:
+            # Filter out stale data
+            cutoff = (dt.date.today() - dt.timedelta(days=LOOKBACK_MONTHS * 30 + 15)).isoformat()
+            df = df[df["trade_date"] >= cutoff]
+            df.to_sql("ohlcv", conn, if_exists="append", index=False, method="multi")
+            conn.commit()
+            restored = len(df)
+            conn.close()
+            return restored
+    except Exception:
+        pass
+
+    conn.close()
+    return 0
 
 
 # ---------------------------------------------------------------------------
@@ -336,6 +390,10 @@ def load_all_data(progress_callback=None) -> bool:
         ("last_updated", dt.datetime.now().isoformat())
     )
     conn.commit()
+
+    # Persist to parquet for fast cold-start recovery
+    save_ohlcv_parquet(conn)
+
     conn.close()
 
     if progress_callback:

@@ -16,7 +16,8 @@ st.set_page_config(
 )
 
 from src.data_fetcher import (load_all_data, get_ohlcv_df, get_last_updated,
-                               get_db, get_data_window, fetch_stock_info)
+                               get_db, get_data_window, fetch_stock_info,
+                               restore_from_parquet, save_ohlcv_parquet)
 from src.data_extras import (fetch_fii_dii_data, fetch_bulk_deals, fetch_promoter_data,
                               fetch_sector_indices, get_india_vix)
 
@@ -67,6 +68,32 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
+# Smart startup: restore from parquet cache + fetch only missing days
+# ---------------------------------------------------------------------------
+
+if "startup_done" not in st.session_state:
+    restored = restore_from_parquet()
+    if restored > 0:
+        # Parquet had data — now just fetch missing recent days
+        with st.spinner("Updating with latest market data..."):
+            load_all_data()
+    else:
+        # Check if SQLite already has data (normal warm restart)
+        conn = get_db()
+        row_count = conn.execute("SELECT COUNT(*) FROM ohlcv").fetchone()[0]
+        conn.close()
+        if row_count > 0:
+            # SQLite has data, fetch any missing days silently
+            from src.data_fetcher import get_dates_to_fetch as _gdf
+            conn = get_db()
+            missing = _gdf(conn)
+            conn.close()
+            if missing:
+                with st.spinner(f"Fetching {len(missing)} missing day(s)..."):
+                    load_all_data()
+    st.session_state["startup_done"] = True
+
+# ---------------------------------------------------------------------------
 # Header with logo
 # ---------------------------------------------------------------------------
 
@@ -110,7 +137,7 @@ st.divider()
 # Cached loaders
 # ---------------------------------------------------------------------------
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=3600, show_spinner=False)
 def load_cached_ohlcv():
     try:
         return get_ohlcv_df()
@@ -200,6 +227,7 @@ with col5:
             status_text.empty()
 
             if success:
+                # Parquet is already saved inside load_all_data
                 load_cached_ohlcv.clear()
                 load_stock_info.clear()
                 st.rerun()
@@ -277,10 +305,11 @@ def fmt_vol_col(df, cols):
 # Tabs
 # ---------------------------------------------------------------------------
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+tab1, tab2, tab3, tab8, tab4, tab5, tab6, tab7 = st.tabs([
     "  Price Drops  ",
     "  Sideways Movers  ",
     "  Volume Buzz  ",
+    "  Price-Volume Intersection  ",
     "  Top Momentum  ",
     "  Big Player Activity  ",
     "  Sector Map  ",
@@ -405,7 +434,7 @@ with tab3:
         )
 
     vol_threshold = st.slider("Volume above average (%)", 25, 200, 50, 25, key="vol_thresh")
-    consec_days = st.slider("Consecutive high-volume days", 1, 5, 3, 1, key="vol_days")
+    consec_days = st.slider("Consecutive high-volume days", 1, 15, 10, 1, key="vol_days")
 
     from src.screener_volume import screen_volume_spikes
     with st.spinner("Screening..."):
@@ -430,6 +459,80 @@ with tab3:
         st.dataframe(styled, width="stretch", hide_index=True)
     else:
         st.info("No volume spikes detected. Try lowering the threshold.")
+
+# ==================== Tab 8: Price-Volume Intersection ====================
+with tab8:
+    st.subheader("Price-Volume Intersection — Dropped Stocks With Volume Surge")
+
+    with st.expander("What is this & how does it help?", expanded=False):
+        st.markdown(
+            "**What it tracks:** Stocks that appear in **both** the Price Drops screen "
+            "and the Volume Buzz screen simultaneously.\n\n"
+            "**Why it matters:** A stock that has dropped significantly AND is now seeing "
+            "a surge in trading volume is showing signs of a potential reversal. The drop "
+            "creates value, and the volume surge suggests smart money is stepping in.\n\n"
+            "**How to read the table:**\n"
+            "- **Drop %** — How much the stock fell from its 6-month high\n"
+            "- **RSI** — Below 30 = oversold (more upside potential)\n"
+            "- **Vol Ratio** — How many times current volume is vs. average\n"
+            "- **Delivery Above Avg** — \"Yes\" = genuine buying, not just speculation\n\n"
+            "**Recommendation:** These are the highest-conviction reversal candidates. "
+            "A big drop + volume surge + high delivery = strong accumulation signal. "
+            "Always check the news to rule out fundamental problems."
+        )
+
+    # Controls for this intersection
+    int_drop = st.slider("Minimum drop from 6M high (%)", 10, 50, 20, 5, key="int_drop")
+    int_col1, int_col2 = st.columns(2)
+    with int_col1:
+        int_vol = st.slider("Volume above average (%)", 25, 200, 50, 25, key="int_vol")
+    with int_col2:
+        int_days = st.slider("Consecutive high-volume days", 1, 15, 3, 1, key="int_days")
+
+    from src.screener_price import screen_big_drops
+    from src.screener_volume import screen_volume_spikes
+
+    with st.spinner("Screening..."):
+        int_drops_df = screen_big_drops(ohlcv, threshold_pct=int_drop)
+        int_vol_df = screen_volume_spikes(ohlcv, vol_threshold_pct=int_vol,
+                                           consecutive_days=int_days)
+
+    if not int_drops_df.empty and not int_vol_df.empty:
+        # Find symbols in both sets
+        drop_symbols = set(int_drops_df["Symbol"].tolist())
+        vol_symbols = set(int_vol_df["Symbol"].tolist())
+        common = drop_symbols & vol_symbols
+
+        st.metric("Stocks Found", len(common))
+
+        if common:
+            # Merge key columns from both screens
+            drops_sub = int_drops_df[int_drops_df["Symbol"].isin(common)][
+                ["Symbol", "Current Price", "6M High", "Drop %", "RSI"]
+            ].copy()
+            vol_sub = int_vol_df[int_vol_df["Symbol"].isin(common)][
+                ["Symbol", "Vol Ratio", "Delivery Above Avg", "Price Change %"]
+            ].copy()
+            merged = drops_sub.merge(vol_sub, on="Symbol", how="inner")
+            merged = merged.sort_values("Drop %")
+
+            display_df = enrich_with_info(merged)
+            display_df = fmt_price_col(display_df, ["Current Price", "6M High"])
+            display_df = fmt_pct_col(display_df, ["Drop %", "Price Change %"])
+            display_df = fmt_num_col(display_df, ["RSI", "Vol Ratio"])
+
+            def highlight_intersection(val):
+                if isinstance(val, str) and val == "Yes":
+                    return "background-color: #c8e6c9"
+                return ""
+
+            styled = display_df.style.map(highlight_intersection, subset=["Delivery Above Avg"])
+            st.dataframe(styled, width="stretch", hide_index=True)
+        else:
+            st.info("No stocks currently appear in both Price Drops and Volume Buzz. "
+                    "Try adjusting the thresholds.")
+    else:
+        st.info("Not enough data to compute intersection. Ensure both screens have results.")
 
 # ==================== Tab 4: Top Momentum ====================
 with tab4:
