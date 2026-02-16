@@ -264,18 +264,32 @@ def fetch_promoter_data(force_refresh=False, progress_callback=None) -> pd.DataF
     session = _nse_session()
     total = len(symbols)
     fetched = 0
+    consecutive_fails = 0
 
     for i, symbol in enumerate(symbols):
+        if progress_callback and total > 0:
+            pct = 0.15 + 0.83 * (i + 1) / total
+            progress_callback(pct, "Fetching {}/{} stocks ({} saved)".format(
+                i + 1, total, fetched))
+
+        # If NSE is blocking us, stop early instead of timing out 500 times
+        if consecutive_fails >= 10:
+            if progress_callback:
+                progress_callback(0.98, "NSE rate limit hit — loaded {} stocks".format(fetched))
+            break
+
         try:
             url = (
                 "https://www.nseindia.com/api/corporates-shareholding"
                 "?index=equities&symbol=" + requests.utils.quote(symbol)
             )
-            resp = session.get(url, timeout=15)
+            resp = session.get(url, timeout=8)
             if resp.status_code != 200:
-                _time.sleep(0.5)
+                consecutive_fails += 1
+                _time.sleep(0.3)
                 continue
 
+            consecutive_fails = 0
             data = resp.json()
             # NSE returns a list of quarterly records
             records = data if isinstance(data, list) else data.get("data", [])
@@ -303,17 +317,17 @@ def fetch_promoter_data(force_refresh=False, progress_callback=None) -> pd.DataF
                     continue
 
             conn.commit()
+        except requests.exceptions.Timeout:
+            consecutive_fails += 1
         except Exception:
-            pass
-
-        if progress_callback and total > 0:
-            pct = 0.15 + 0.83 * (i + 1) / total
-            progress_callback(pct, "Fetched {}/{} stocks".format(i + 1, total))
+            consecutive_fails += 1
 
         _time.sleep(0.3)  # Rate-limit
 
     result = pd.read_sql("SELECT * FROM promoter_data", conn)
     conn.close()
+    if progress_callback:
+        progress_callback(1.0, "Promoter data ready ({} records)".format(len(result)))
     return result
 
 
