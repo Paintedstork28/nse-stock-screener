@@ -279,16 +279,15 @@ def _loading_bar():
     label = st.markdown('<div class="loading-label">Loading data...</div>',
                         unsafe_allow_html=True)
     bar = st.progress(0)
-    status = st.empty()
 
     def callback(pct, msg):
-        bar.progress(min(pct, 1.0))
-        status.text(msg)
+        clamped = min(pct, 1.0)
+        pct_str = str(int(clamped * 100)) + "%"
+        bar.progress(clamped, text=pct_str + " — " + msg)
 
     def cleanup():
         label.empty()
         bar.empty()
-        status.empty()
 
     return callback, cleanup
 
