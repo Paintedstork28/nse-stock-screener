@@ -153,9 +153,10 @@ st.markdown("""
 if "startup_done" not in st.session_state:
     restored = restore_from_parquet()
     if restored > 0:
-        _cb, _done = _loading_bar()
-        load_all_data(progress_callback=_cb)
-        _done()
+        with st.sidebar:
+            _cb, _done = _loading_bar()
+            load_all_data(progress_callback=_cb)
+            _done()
     else:
         conn = get_db()
         row_count = conn.execute("SELECT COUNT(*) FROM ohlcv").fetchone()[0]
@@ -166,9 +167,10 @@ if "startup_done" not in st.session_state:
             missing = _gdf(conn)
             conn.close()
             if missing:
-                _cb, _done = _loading_bar()
-                load_all_data(progress_callback=_cb)
-                _done()
+                with st.sidebar:
+                    _cb, _done = _loading_bar()
+                    load_all_data(progress_callback=_cb)
+                    _done()
     st.session_state["startup_done"] = True
 
 # ---------------------------------------------------------------------------
@@ -315,15 +317,12 @@ with st.sidebar:
         st.markdown("### Stock Screener")
     st.caption("Smart screening for Indian equities")
 
-    # Refresh button
+    # Refresh button (market data only; promoter data refreshes on its own tab)
     if st.button("Refresh Data", use_container_width=True):
         _cb, _done = _loading_bar()
 
         _cb(0.0, "Downloading market data...")
         success = load_all_data(progress_callback=_cb)
-
-        _cb(0.85, "Refreshing promoter shareholding data...")
-        fetch_promoter_data(force_refresh=True, progress_callback=_cb)
 
         _done()
 
