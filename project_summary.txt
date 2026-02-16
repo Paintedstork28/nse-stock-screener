@@ -3,7 +3,7 @@ PROJECT SUMMARY: NSE Stock Screener
 
 1. PROJECT CONCEPT
 -------------------
-A web-based stock screener for all NSE-listed equities (~2,200+ stocks) with 6 months of rolling historical data. Built for a non-tech-savvy serious stock trader — accessible via a simple shareable link, no installation needed. Seven screener tabs cover price drops, consolidation, volume, momentum, smart money signals, sector rotation, and red flags.
+A web-based stock screener for all NSE-listed equities (~2,200+ stocks) with 6 months of rolling historical data. Built for a non-tech-savvy serious stock trader — accessible via a simple shareable link, no installation needed. Eight screener views cover price drops, consolidation, volume, price-volume intersection, smart money signals, promoter holdings, sector rotation, and red flags.
 
 2. HOW IT WAS BUILT
 --------------------
@@ -17,7 +17,7 @@ Tech stack:
 
 Architecture:
 - 12 Python files across src/ modules, each under 300 lines
-- app.py is the Streamlit entry point — renders header, info bar, 7 tabs
+- app.py is the Streamlit entry point — sidebar navigation + data-only main area
 - src/data_fetcher.py handles bhavcopy downloads and SQLite storage
 - src/data_extras.py fetches supplementary data (FII/DII, bulk deals, sectors)
 - src/indicators.py computes all technical indicators from raw OHLCV data
@@ -46,7 +46,7 @@ sector_indices (index_name, trade_date, close)
 
 promoter_data (symbol, quarter, promoter_holding_pct, pledge_pct, fii_holding_pct, dii_holding_pct, public_holding_pct)
   - Primary key: (symbol, quarter)
-  - Placeholder — needs NSDL/BSE data source
+  - Populated from NSE shareholding API; refreshed via "Refresh Data" button
 
 metadata (key, value)
   - Stores last_updated timestamp
@@ -95,17 +95,38 @@ Total cost: ₹0 — all data sources are free and publicly available.
 
 8. WHAT IT CAN BE USED FOR
 ---------------------------
-- Daily screening of NSE stocks across 7 different strategies
+- Daily screening of NSE stocks across 8 different strategies
 - Identifying oversold value picks (Price Drops + low RSI)
 - Spotting breakout candidates (Sideways Movers + low Bollinger Bandwidth)
-- Finding momentum stocks to ride (Top Momentum)
 - Detecting institutional buying patterns (Big Player Activity)
+- Tracking promoter holding changes and pledging (Promoter Holdings)
 - Sector rotation analysis (Sector Map)
 - Risk avoidance — flagging death crosses, speculative rallies, deep downtrends
 
+10. UX CHANGES (Feb 2026)
+--------------------------
+- Replaced main-area tabs with sidebar radio selector under a "Data Cuts" header
+- Moved logo, title, Refresh button, VIX card, and Data Sources card into the sidebar
+- Sidebar starts expanded so first-time users see all controls
+- Filter sliders remain in main area above each table for quick access
+- "How to read this" explainers are collapsible expanders below each table
+- Main area is now data-only: just a count caption + data table/chart per screen
+- Added Price-Volume Intersection screen (8th view) — stocks appearing in both Price Drops and Volume Buzz
+- Sub-tabs preserved for Big Player Activity (3 sub-tabs) and Warning Signs (4 sub-tabs)
+- Market breadth metrics displayed as a compact 4-column row on Sector Map
+- Removed tab-separator CSS and main tab styling; kept sub-tab styling
+
+11. PROMOTER HOLDINGS & PROGRESS BARS (Feb 2026)
+--------------------------------------------------
+- Added Promoter Holdings screen: fetches quarterly shareholding from NSE API, shows 6-month change in promoter %, pledge %, FII %, DII %
+- New file: src/screener_promoter.py (~80 lines)
+- Promoter data now refreshes as part of the main "Refresh Data" button
+- Added orange progress bars with pulsing "LOADING DATA..." label to all data-loading points (startup, refresh, tab-level fetches) — visually distinct from slider controls
+- Removed Top Momentum tab
+- Moved Submit Feedback button to the bottom of the page
+
 9. SUGGESTED NEXT STEPS
 ------------------------
-- Add promoter pledging data source (NSDL/BSE quarterly filings)
 - Add stock-level detail view — click a symbol to see its price chart + indicators
 - Add email/Telegram alerts when a stock matches a screener for the first time
 - Add watchlist feature — save favourite stocks and track them across tabs

@@ -31,18 +31,25 @@ def _nse_session():
 # FII/DII data
 # ---------------------------------------------------------------------------
 
-def fetch_fii_dii_data(days: int = 30) -> pd.DataFrame:
+def fetch_fii_dii_data(days: int = 30, progress_callback=None) -> pd.DataFrame:
     """Fetch FII/DII daily activity data."""
     conn = get_db()
+
+    if progress_callback:
+        progress_callback(0.1, "Checking cached FII/DII data...")
 
     # Check cache
     cached = pd.read_sql("SELECT * FROM fii_dii ORDER BY trade_date DESC", conn)
     if len(cached) >= days:
         conn.close()
+        if progress_callback:
+            progress_callback(1.0, "FII/DII data loaded from cache")
         return cached.head(days)
 
     # Try NSE API
     try:
+        if progress_callback:
+            progress_callback(0.3, "Fetching FII/DII data from NSE...")
         session = _nse_session()
         url = "https://www.nseindia.com/api/fiidiiTradeReact"
         resp = session.get(url, timeout=15)
@@ -90,10 +97,15 @@ def fetch_fii_dii_data(days: int = 30) -> pd.DataFrame:
     except Exception:
         pass
 
+    if progress_callback:
+        progress_callback(0.9, "Loading FII/DII results...")
+
     result = pd.read_sql(
         "SELECT * FROM fii_dii ORDER BY trade_date DESC LIMIT ?", conn, params=(days,)
     )
     conn.close()
+    if progress_callback:
+        progress_callback(1.0, "FII/DII data ready")
     return result
 
 
@@ -101,9 +113,12 @@ def fetch_fii_dii_data(days: int = 30) -> pd.DataFrame:
 # Bulk / Block deals
 # ---------------------------------------------------------------------------
 
-def fetch_bulk_deals(days: int = 30) -> pd.DataFrame:
+def fetch_bulk_deals(days: int = 30, progress_callback=None) -> pd.DataFrame:
     """Fetch recent bulk and block deals from NSE."""
     conn = get_db()
+
+    if progress_callback:
+        progress_callback(0.1, "Checking cached bulk deals...")
 
     # Check cache
     cutoff = (dt.date.today() - dt.timedelta(days=days)).isoformat()
@@ -113,10 +128,14 @@ def fetch_bulk_deals(days: int = 30) -> pd.DataFrame:
     )
     if len(cached) > 0:
         conn.close()
+        if progress_callback:
+            progress_callback(1.0, "Bulk deals loaded from cache")
         return cached
 
     # Try NSE API
     try:
+        if progress_callback:
+            progress_callback(0.3, "Fetching bulk deals from NSE...")
         session = _nse_session()
         for deal_type, url in [
             ("BULK", "https://www.nseindia.com/api/snapshot-capital-market-largedeal"),
@@ -152,11 +171,16 @@ def fetch_bulk_deals(days: int = 30) -> pd.DataFrame:
     except Exception:
         pass
 
+    if progress_callback:
+        progress_callback(0.9, "Loading bulk deals results...")
+
     result = pd.read_sql(
         "SELECT * FROM bulk_deals WHERE trade_date >= ? ORDER BY trade_date DESC",
         conn, params=(cutoff,)
     )
     conn.close()
+    if progress_callback:
+        progress_callback(1.0, "Bulk deals ready")
     return result
 
 
@@ -164,31 +188,113 @@ def fetch_bulk_deals(days: int = 30) -> pd.DataFrame:
 # Promoter holding + pledge data
 # ---------------------------------------------------------------------------
 
-def fetch_promoter_data() -> pd.DataFrame:
-    """Fetch promoter holding and pledge data."""
+def fetch_promoter_data(force_refresh=False, progress_callback=None) -> pd.DataFrame:
+    """Fetch promoter holding and pledge data from NSE shareholding API.
+
+    Args:
+        force_refresh: If True, re-fetch even if cached data exists.
+        progress_callback: Optional callable(pct, msg) for progress updates.
+    """
+    import time as _time
+
     conn = get_db()
 
-    cached = pd.read_sql("SELECT * FROM promoter_data", conn)
-    if len(cached) > 0:
-        conn.close()
-        return cached
+    if progress_callback:
+        progress_callback(0.05, "Checking cached promoter data...")
 
-    # Generate sample quarterly data structure — real data needs NSDL/BSE API
-    # Placeholder: return empty DataFrame with correct schema
+    if not force_refresh:
+        cached = pd.read_sql("SELECT * FROM promoter_data", conn)
+        if len(cached) > 0:
+            conn.close()
+            if progress_callback:
+                progress_callback(1.0, "Promoter data loaded from cache")
+            return cached
+
+    # Get symbols from ohlcv table
+    symbols_df = pd.read_sql(
+        "SELECT DISTINCT symbol FROM ohlcv ORDER BY symbol", conn
+    )
+    if symbols_df.empty:
+        conn.close()
+        return pd.DataFrame(columns=[
+            "symbol", "quarter", "promoter_holding_pct", "pledge_pct",
+            "fii_holding_pct", "dii_holding_pct", "public_holding_pct"
+        ])
+
+    symbols = symbols_df["symbol"].tolist()
+
+    # Already-cached symbols (skip unless force_refresh)
+    if not force_refresh:
+        cached_syms = set(
+            pd.read_sql("SELECT DISTINCT symbol FROM promoter_data", conn)["symbol"]
+        )
+        symbols = [s for s in symbols if s not in cached_syms]
+
+    session = _nse_session()
+    total = len(symbols)
+    fetched = 0
+
+    for i, symbol in enumerate(symbols):
+        try:
+            url = (
+                "https://www.nseindia.com/api/corporates-shareholding"
+                "?index=equities&symbol=" + requests.utils.quote(symbol)
+            )
+            resp = session.get(url, timeout=15)
+            if resp.status_code != 200:
+                _time.sleep(0.5)
+                continue
+
+            data = resp.json()
+            # NSE returns a list of quarterly records
+            records = data if isinstance(data, list) else data.get("data", [])
+
+            for rec in records:
+                try:
+                    quarter = rec.get("date", rec.get("quarter", ""))
+                    promoter = float(rec.get("promoterAndPromoterGroup", 0))
+                    pledge = float(rec.get("promoterPledge", rec.get("pledgedPercentage", 0)))
+                    fii = float(rec.get("foreignInstitutions", rec.get("fiiOrFpi", 0)))
+                    dii = float(rec.get("mutualFunds", 0)) + float(rec.get("financialInstitutionsOrBanks", 0))
+                    public = float(rec.get("publicShareholding", rec.get("public", 0)))
+
+                    if not quarter or promoter == 0:
+                        continue
+
+                    conn.execute("""
+                        INSERT OR REPLACE INTO promoter_data
+                        (symbol, quarter, promoter_holding_pct, pledge_pct,
+                         fii_holding_pct, dii_holding_pct, public_holding_pct)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """, (symbol, quarter, promoter, pledge, fii, dii, public))
+                    fetched += 1
+                except (ValueError, TypeError):
+                    continue
+
+            conn.commit()
+        except Exception:
+            pass
+
+        if progress_callback and total > 0:
+            progress_callback((i + 1) / total, f"Fetched {i + 1}/{total} symbols")
+
+        _time.sleep(0.5)  # Rate-limit
+
+    result = pd.read_sql("SELECT * FROM promoter_data", conn)
     conn.close()
-    return pd.DataFrame(columns=[
-        "symbol", "quarter", "promoter_holding_pct", "pledge_pct",
-        "fii_holding_pct", "dii_holding_pct", "public_holding_pct"
-    ])
+    return result
 
 
 # ---------------------------------------------------------------------------
 # Sector indices
 # ---------------------------------------------------------------------------
 
-def fetch_sector_indices(days: int = 180) -> pd.DataFrame:
+def fetch_sector_indices(days: int = 180, progress_callback=None) -> pd.DataFrame:
     """Fetch sectoral index data using yfinance as fallback."""
     conn = get_db()
+
+    if progress_callback:
+        progress_callback(0.05, "Checking cached sector data...")
 
     cutoff = (dt.date.today() - dt.timedelta(days=days)).isoformat()
     cached = pd.read_sql(
@@ -197,6 +303,8 @@ def fetch_sector_indices(days: int = 180) -> pd.DataFrame:
     )
     if len(cached) > 50:
         conn.close()
+        if progress_callback:
+            progress_callback(1.0, "Sector data loaded from cache")
         return cached
 
     # Use yfinance for sector indices
@@ -217,7 +325,11 @@ def fetch_sector_indices(days: int = 180) -> pd.DataFrame:
     try:
         import yfinance as yf
         start = dt.date.today() - dt.timedelta(days=days)
-        for name, ticker in sector_tickers.items():
+        total_sectors = len(sector_tickers)
+        for idx, (name, ticker) in enumerate(sector_tickers.items()):
+            if progress_callback:
+                progress_callback(0.1 + 0.8 * idx / total_sectors,
+                                  f"Downloading {name} ({idx + 1}/{total_sectors})...")
             try:
                 data = yf.download(ticker, start=start, progress=False)
                 if data is not None and len(data) > 0:
@@ -236,11 +348,16 @@ def fetch_sector_indices(days: int = 180) -> pd.DataFrame:
     except ImportError:
         pass
 
+    if progress_callback:
+        progress_callback(0.95, "Loading sector results...")
+
     result = pd.read_sql(
         "SELECT * FROM sector_indices WHERE trade_date >= ? ORDER BY index_name, trade_date",
         conn, params=(cutoff,)
     )
     conn.close()
+    if progress_callback:
+        progress_callback(1.0, "Sector data ready")
     return result
 
 

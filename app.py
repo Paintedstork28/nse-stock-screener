@@ -96,6 +96,27 @@ st.markdown("""
         background-color: #2a2a3e;
     }
 
+    /* Progress bar — orange fill on visible grey track */
+    .stProgress > div > div > div {
+        background: linear-gradient(90deg, #ff9f43 0%, #f0932b 100%) !important;
+    }
+    .stProgress > div > div {
+        background-color: #4a4a5e !important;
+    }
+    .loading-label {
+        font-size: 0.75rem;
+        color: #ff9f43;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        margin-bottom: 2px;
+        animation: pulse-loading 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse-loading {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+
     /* Subheader styling */
     .stSubheader, h3 {
         color: #e8e8f0 !important;
@@ -123,8 +144,9 @@ st.markdown("""
 if "startup_done" not in st.session_state:
     restored = restore_from_parquet()
     if restored > 0:
-        with st.spinner("Updating with latest market data..."):
-            load_all_data()
+        _cb, _done = _loading_bar()
+        load_all_data(progress_callback=_cb)
+        _done()
     else:
         conn = get_db()
         row_count = conn.execute("SELECT COUNT(*) FROM ohlcv").fetchone()[0]
@@ -135,8 +157,9 @@ if "startup_done" not in st.session_state:
             missing = _gdf(conn)
             conn.close()
             if missing:
-                with st.spinner(f"Fetching {len(missing)} missing day(s)..."):
-                    load_all_data()
+                _cb, _done = _loading_bar()
+                load_all_data(progress_callback=_cb)
+                _done()
     st.session_state["startup_done"] = True
 
 # ---------------------------------------------------------------------------
@@ -251,6 +274,25 @@ def fmt_vol_col(df, cols):
     return df
 
 
+def _loading_bar():
+    """Create a labeled loading bar. Returns (callback, cleanup) functions."""
+    label = st.markdown('<div class="loading-label">Loading data...</div>',
+                        unsafe_allow_html=True)
+    bar = st.progress(0)
+    status = st.empty()
+
+    def callback(pct, msg):
+        bar.progress(min(pct, 1.0))
+        status.text(msg)
+
+    def cleanup():
+        label.empty()
+        bar.empty()
+        status.empty()
+
+    return callback, cleanup
+
+
 # ---------------------------------------------------------------------------
 # SIDEBAR — all controls, context, and navigation
 # ---------------------------------------------------------------------------
@@ -267,24 +309,22 @@ with st.sidebar:
 
     # Refresh button
     if st.button("Refresh Data", use_container_width=True):
-        with st.spinner("Downloading market data..."):
-            progress_bar = st.progress(0)
-            status_text = st.empty()
+        _cb, _done = _loading_bar()
 
-            def update_progress(pct, msg):
-                progress_bar.progress(min(pct, 1.0))
-                status_text.text(msg)
+        _cb(0.0, "Downloading market data...")
+        success = load_all_data(progress_callback=_cb)
 
-            success = load_all_data(progress_callback=update_progress)
-            progress_bar.empty()
-            status_text.empty()
+        _cb(0.85, "Refreshing promoter shareholding data...")
+        fetch_promoter_data(force_refresh=True, progress_callback=_cb)
 
-            if success:
-                load_cached_ohlcv.clear()
-                load_stock_info.clear()
-                st.rerun()
-            else:
-                st.error("Some data may not have loaded.")
+        _done()
+
+        if success:
+            load_cached_ohlcv.clear()
+            load_stock_info.clear()
+            st.rerun()
+        else:
+            st.error("Some data may not have loaded.")
     st.caption(f"Last refreshed: {last_updated or 'Never'}  ·  Data: {window_text}")
 
     # VIX card
@@ -321,8 +361,8 @@ with st.sidebar:
         "Sideways Movers",
         "Volume Buzz",
         "Price-Volume Intersection",
-        "Top Momentum",
         "Big Player Activity",
+        "Promoter Holdings",
         "Sector Map",
         "Warning Signs",
     ], label_visibility="collapsed")
@@ -511,28 +551,6 @@ elif screen == "Price-Volume Intersection":
             "Always check news to rule out fundamental problems."
         )
 
-elif screen == "Top Momentum":
-    from src.screener_momentum import screen_momentum_leaders
-    with st.spinner("Screening..."):
-        momentum_df = screen_momentum_leaders(ohlcv)
-
-    st.caption(f"{len(momentum_df)} stocks found")
-
-    if not momentum_df.empty:
-        display_df = enrich_with_info(momentum_df.copy())
-        display_df = fmt_price_col(display_df, ["Price", "6M High", "50 DMA", "200 DMA"])
-        display_df = fmt_pct_col(display_df, ["Dist from High %"])
-        display_df = fmt_num_col(display_df, ["RSI"])
-        st.dataframe(display_df, width="stretch", hide_index=True)
-    else:
-        st.info("No momentum leaders found matching all criteria.")
-
-    with st.expander("How to read this"):
-        st.markdown(
-            "Stocks near 6M high, above 50 & 200 DMA, RSI 55-75, Supertrend = BUY.\n\n"
-            "\"Ride the wave\" stocks. Enter on dips, stop-loss below 50 DMA."
-        )
-
 elif screen == "Big Player Activity":
     from src.screener_smart_money import (get_bulk_deals_summary,
                                            screen_delivery_breakouts, screen_obv_divergence)
@@ -542,9 +560,10 @@ elif screen == "Big Player Activity":
     sub1, sub2, sub3 = st.tabs(["Bulk Deals", "Delivery Breakouts", "OBV Accumulation"])
 
     with sub1:
-        with st.spinner("Fetching deals..."):
-            bulk_raw = fetch_bulk_deals(days=30)
-            bulk_df = get_bulk_deals_summary(bulk_raw)
+        _cb, _done = _loading_bar()
+        bulk_raw = fetch_bulk_deals(days=30, progress_callback=_cb)
+        bulk_df = get_bulk_deals_summary(bulk_raw)
+        _done()
         if not bulk_df.empty:
             display_df = bulk_df.copy()
             if "Symbol" in display_df.columns:
@@ -591,13 +610,45 @@ elif screen == "Big Player Activity":
             "Strongest signal: same stock across multiple sub-tabs."
         )
 
+elif screen == "Promoter Holdings":
+    from src.screener_promoter import screen_promoter_holdings
+
+    min_change = st.slider("Minimum absolute change in holding (%)", 0.0, 10.0, 1.0, 0.5,
+                            key="promo_change")
+
+    _cb, _done = _loading_bar()
+    promoter_df = fetch_promoter_data(progress_callback=_cb)
+    promo_screen = screen_promoter_holdings(promoter_df, min_change=min_change)
+    _done()
+
+    st.caption(f"{len(promo_screen)} stocks found")
+
+    if not promo_screen.empty:
+        display_df = enrich_with_info(promo_screen.copy())
+        display_df = fmt_pct_col(display_df, [
+            "Promoter Holding %", "6M Change %", "Pledge %", "FII %", "DII %"
+        ])
+        st.dataframe(display_df, width="stretch", hide_index=True)
+    else:
+        st.info("No promoter data available. Click **Refresh Promoter Data** in the sidebar.")
+
+    with st.expander("How to read this"):
+        st.markdown(
+            "**Promoter Holding %** — Current promoter stake in the company\n\n"
+            "**6M Change %** — Change vs ~2 quarters ago. Negative = promoters selling.\n\n"
+            "**Pledge %** — Shares pledged as collateral. High pledge = risk.\n\n"
+            "**FII / DII %** — Institutional interest. Rising FII = foreign confidence.\n\n"
+            "Watch for: promoter holding dropping + pledge rising = red flag."
+        )
+
 elif screen == "Sector Map":
     from src.screener_sector import (compute_sector_performance, create_sector_heatmap,
                                       create_fii_dii_chart, compute_market_breadth)
 
-    with st.spinner("Loading sector data..."):
-        sector_data = fetch_sector_indices(days=180)
-        perf_df = compute_sector_performance(sector_data)
+    _cb, _done = _loading_bar()
+    sector_data = fetch_sector_indices(days=180, progress_callback=_cb)
+    perf_df = compute_sector_performance(sector_data)
+    _done()
 
     if not perf_df.empty:
         fig = create_sector_heatmap(perf_df)
@@ -622,8 +673,9 @@ elif screen == "Sector Map":
 
     st.markdown("---")
     st.caption("FII / DII Activity (last 30 days)")
-    with st.spinner("Loading FII/DII data..."):
-        fii_dii = fetch_fii_dii_data(days=30)
+    _cb2, _done2 = _loading_bar()
+    fii_dii = fetch_fii_dii_data(days=30, progress_callback=_cb2)
+    _done2()
     if not fii_dii.empty:
         fig2 = create_fii_dii_chart(fii_dii)
         st.plotly_chart(fig2, use_container_width=True)
@@ -684,9 +736,10 @@ elif screen == "Warning Signs":
             st.info("No stocks below all moving averages.")
 
     with warn4:
-        with st.spinner("Fetching..."):
-            promoter_df = fetch_promoter_data()
-            pledge_df = screen_high_pledge(promoter_df, threshold_pct=pledge_thresh)
+        _cb, _done = _loading_bar()
+        promoter_df = fetch_promoter_data(progress_callback=_cb)
+        pledge_df = screen_high_pledge(promoter_df, threshold_pct=pledge_thresh)
+        _done()
         st.caption(f"{len(pledge_df)} stocks found")
         if not pledge_df.empty:
             display_df = enrich_with_info(pledge_df.copy())
@@ -702,3 +755,10 @@ elif screen == "Warning Signs":
             "**Below All MAs** — Deep downtrend, no support\n\n"
             "**High Pledging** — Promoter shares pledged, crash risk"
         )
+
+# ---------------------------------------------------------------------------
+# Footer — feedback link at the bottom of every screen
+# ---------------------------------------------------------------------------
+
+st.divider()
+st.link_button("Submit Feedback", "https://docs.google.com/forms/d/e/1FAIpQLSec94JqSoORKeymQfytttRPG0AAU53HqiaH8pCuiar-sjKVsg/viewform")
