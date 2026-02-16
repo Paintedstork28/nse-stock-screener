@@ -210,7 +210,17 @@ def fetch_promoter_data(force_refresh=False, progress_callback=None) -> pd.DataF
                 progress_callback(1.0, "Promoter data loaded from cache")
             return cached
 
-    # Get symbols from ohlcv table
+    # Get Nifty 500 symbols only (not all ~2,200 NSE stocks) for speed
+    nifty500_syms = set()
+    try:
+        n500_url = "https://www.niftyindices.com/IndexConstituent/ind_nifty500list.csv"
+        n500_resp = requests.get(n500_url, headers=_NSE_HEADERS, timeout=15)
+        if n500_resp.status_code == 200 and len(n500_resp.text) > 200:
+            n500_df = pd.read_csv(io.StringIO(n500_resp.text))
+            nifty500_syms = set(n500_df["Symbol"].str.strip().tolist())
+    except Exception:
+        pass
+
     symbols_df = pd.read_sql(
         "SELECT DISTINCT symbol FROM ohlcv ORDER BY symbol", conn
     )
@@ -221,7 +231,9 @@ def fetch_promoter_data(force_refresh=False, progress_callback=None) -> pd.DataF
             "fii_holding_pct", "dii_holding_pct", "public_holding_pct"
         ])
 
-    symbols = symbols_df["symbol"].tolist()
+    all_symbols = symbols_df["symbol"].tolist()
+    # Filter to Nifty 500 if available, else fall back to all
+    symbols = [s for s in all_symbols if s in nifty500_syms] if nifty500_syms else all_symbols
 
     # Already-cached symbols (skip unless force_refresh)
     if not force_refresh:

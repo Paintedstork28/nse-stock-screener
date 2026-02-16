@@ -613,6 +613,7 @@ elif screen == "Big Player Activity":
 elif screen == "Promoter Holdings":
     from src.screener_promoter import screen_promoter_holdings
 
+    st.caption("Covers Nifty 500 stocks only for faster loading.")
     min_change = st.slider("Minimum absolute change in holding (%)", 0.0, 10.0, 1.0, 0.5,
                             key="promo_change")
 
