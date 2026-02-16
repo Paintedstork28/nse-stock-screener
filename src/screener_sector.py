@@ -73,28 +73,30 @@ def create_sector_heatmap(perf_df: pd.DataFrame) -> go.Figure:
         x=periods,
         y=sectors,
         colorscale=[
-            [0, "#d32f2f"],
-            [0.35, "#ffcdd2"],
-            [0.5, "#ffffff"],
-            [0.65, "#c8e6c9"],
-            [1, "#2e7d32"],
+            [0, "#ff4444"],
+            [0.35, "#cc3333"],
+            [0.5, "#2a2a3e"],
+            [0.65, "#008f4d"],
+            [1, "#00ff88"],
         ],
         zmid=0,
         text=[[f"{v:.1f}%" if not np.isnan(v) else "" for v in row] for row in z_data],
         texttemplate="%{text}",
-        textfont=dict(size=12),
+        textfont=dict(size=12, color="#e8e8f0"),
         hovertemplate="Sector: %{y}<br>Period: %{x}<br>Return: %{text}<extra></extra>",
     ))
 
     fig.update_layout(
-        title="Sector Performance Heatmap",
+        title=dict(text="Sector Performance Heatmap", font=dict(color="#e8e8f0")),
         xaxis_title="Period",
         yaxis_title="",
         height=max(400, len(sectors) * 35),
         margin=dict(l=150, r=50, t=60, b=50),
-        font=dict(size=12),
-        paper_bgcolor="white",
-        plot_bgcolor="white",
+        font=dict(size=12, color="#e8e8f0"),
+        paper_bgcolor="#1a1a2e",
+        plot_bgcolor="#1a1a2e",
+        xaxis=dict(color="#a8a8b8", gridcolor="#2a2a3e"),
+        yaxis=dict(color="#a8a8b8", gridcolor="#2a2a3e"),
     )
     return fig
 
@@ -113,24 +115,28 @@ def create_fii_dii_chart(fii_dii_df: pd.DataFrame) -> go.Figure:
     fig.add_trace(go.Bar(
         x=df["trade_date"], y=df["fii_net"],
         name="FII Net",
-        marker_color=df["fii_net"].apply(lambda x: "#2e7d32" if x >= 0 else "#d32f2f"),
+        marker_color=df["fii_net"].apply(lambda x: "#00ff88" if x >= 0 else "#ff4444"),
     ))
     fig.add_trace(go.Bar(
         x=df["trade_date"], y=df["dii_net"],
         name="DII Net",
-        marker_color=df["dii_net"].apply(lambda x: "#1565c0" if x >= 0 else "#ef6c00"),
+        marker_color=df["dii_net"].apply(lambda x: "#4dabf7" if x >= 0 else "#ff922b"),
     ))
 
     fig.update_layout(
-        title="FII / DII Net Flow (₹ Cr)",
+        title=dict(text="FII / DII Net Flow (\u20b9 Cr)", font=dict(color="#e8e8f0")),
         barmode="group",
         xaxis_title="Date",
-        yaxis_title="Net Flow (₹ Cr)",
+        yaxis_title="Net Flow (\u20b9 Cr)",
         height=400,
         margin=dict(l=50, r=50, t=60, b=50),
-        paper_bgcolor="white",
-        plot_bgcolor="white",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        paper_bgcolor="#1a1a2e",
+        plot_bgcolor="#1a1a2e",
+        font=dict(color="#e8e8f0"),
+        xaxis=dict(color="#a8a8b8", gridcolor="#2a2a3e"),
+        yaxis=dict(color="#a8a8b8", gridcolor="#2a2a3e"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
+                    bgcolor="#1a1a2e", font=dict(color="#e8e8f0")),
     )
     return fig
 
