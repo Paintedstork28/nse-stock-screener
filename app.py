@@ -621,32 +621,56 @@ elif screen == "Promoter Holdings":
     from src.screener_promoter import screen_promoter_holdings
 
     st.caption("Covers Nifty 500 stocks only for faster loading.")
-    min_change = st.slider("Minimum absolute change in holding (%)", 0.0, 10.0, 1.0, 0.5,
-                            key="promo_change")
 
     _cb, _done = _loading_bar()
     promoter_df = fetch_promoter_data(progress_callback=_cb)
-    promo_screen = screen_promoter_holdings(promoter_df, min_change=min_change)
+    all_promo = screen_promoter_holdings(promoter_df)
     _done()
 
-    st.caption(f"{len(promo_screen)} stocks found")
+    _pct_cols = ["Promoter %", "6M Change %", "Pledge %", "FII %", "DII %"]
+    promo_inc, promo_dec = st.tabs(["Increasing Stake", "Decreasing Stake"])
 
-    if not promo_screen.empty:
-        display_df = enrich_with_info(promo_screen.copy())
-        display_df = fmt_pct_col(display_df, [
-            "Promoter Holding %", "6M Change %", "Pledge %", "FII %", "DII %"
-        ])
-        st.dataframe(display_df, width="stretch", hide_index=True)
-    else:
-        st.info("No promoter data available. Click **Refresh Promoter Data** in the sidebar.")
+    with promo_inc:
+        min_inc = st.slider("Minimum increase in holding (%)", 0.0, 10.0, 1.0, 0.5,
+                            key="promo_inc")
+        inc_df = all_promo[
+            (all_promo["6M Change %"] >= min_inc)
+            & (all_promo["Trend"].isin(["Steady Increase", "Mostly Increasing"]))
+        ].reset_index(drop=True)
+        st.caption(f"{len(inc_df)} stocks found")
+        if not inc_df.empty:
+            display_df = enrich_with_info(inc_df.copy())
+            display_df = fmt_pct_col(display_df, _pct_cols)
+            st.dataframe(display_df, width="stretch", hide_index=True)
+        else:
+            st.info("No stocks with steady promoter stake increase above this threshold.")
+
+    with promo_dec:
+        min_dec = st.slider("Minimum decrease in holding (%)", 0.0, 10.0, 1.0, 0.5,
+                            key="promo_dec")
+        dec_df = all_promo[
+            (all_promo["6M Change %"] <= -min_dec)
+            & (all_promo["Trend"].isin(["Steady Decrease", "Mostly Decreasing"]))
+        ].sort_values("6M Change %", ascending=True).reset_index(drop=True)
+        st.caption(f"{len(dec_df)} stocks found")
+        if not dec_df.empty:
+            display_df = enrich_with_info(dec_df.copy())
+            display_df = fmt_pct_col(display_df, _pct_cols)
+            st.dataframe(display_df, width="stretch", hide_index=True)
+        else:
+            st.info("No stocks with steady promoter stake decrease above this threshold.")
 
     with st.expander("How to read this"):
         st.markdown(
-            "**Promoter Holding %** — Current promoter stake in the company\n\n"
-            "**6M Change %** — Change vs ~2 quarters ago. Negative = promoters selling.\n\n"
+            "**Trend** — Based on quarter-over-quarter changes:\n\n"
+            "- *Steady Increase* — promoters raised stake every quarter (high trust)\n"
+            "- *Mostly Increasing* — raised stake in most quarters\n"
+            "- *Steady Decrease* — promoters reduced stake every quarter (red flag)\n"
+            "- *Mostly Decreasing* — reduced stake in most quarters\n\n"
+            "**QoQ Changes** — Quarter-over-quarter change in holding %. "
+            "e.g. +0.5, +0.3 means two consecutive quarters of increase.\n\n"
             "**Pledge %** — Shares pledged as collateral. High pledge = risk.\n\n"
-            "**FII / DII %** — Institutional interest. Rising FII = foreign confidence.\n\n"
-            "Watch for: promoter holding dropping + pledge rising = red flag."
+            "Watch for: steady decrease + rising pledge = strong red flag."
         )
 
 elif screen == "Sector Map":

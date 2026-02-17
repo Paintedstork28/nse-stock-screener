@@ -1,27 +1,28 @@
-"""Promoter Holdings screener — 6-month change in promoter holding %."""
+"""Promoter Holdings screener — quarter-over-quarter trend analysis."""
 
 import pandas as pd
 
 
-def screen_promoter_holdings(promoter_df, min_change=None):
-    """Compute 6-month change in promoter holdings.
+def screen_promoter_holdings(promoter_df):
+    """Analyse promoter holding trends over available quarters.
 
-    Compares the latest quarter with ~2 quarters prior for each symbol.
+    For each symbol, compares consecutive quarters to determine whether
+    promoters have been steadily increasing, steadily decreasing, or
+    mixed in their holdings over the last 6 months.
 
     Args:
         promoter_df: DataFrame from fetch_promoter_data() with columns:
             symbol, quarter, promoter_holding_pct, pledge_pct,
             fii_holding_pct, dii_holding_pct, public_holding_pct
-        min_change: If set, only show symbols where abs(6M change) >= this value.
 
     Returns:
-        DataFrame with columns: Symbol, Promoter Holding %, 6M Change %,
-        Pledge %, FII %, DII %, Quarter
-        Sorted by 6M Change ascending (biggest drops first).
+        DataFrame with columns: Symbol, Promoter %, 6M Change %, Trend,
+        QoQ Changes, Pledge %, FII %, DII %, Quarters
+        Sorted by 6M Change descending.
     """
     empty = pd.DataFrame(columns=[
-        "Symbol", "Promoter Holding %", "6M Change %",
-        "Pledge %", "FII %", "DII %", "Quarter"
+        "Symbol", "Promoter %", "6M Change %", "Trend",
+        "QoQ Changes", "Pledge %", "FII %", "DII %", "Quarters"
     ])
 
     if promoter_df is None or promoter_df.empty:
@@ -33,45 +34,89 @@ def screen_promoter_holdings(promoter_df, min_change=None):
     df["fii_holding_pct"] = pd.to_numeric(df["fii_holding_pct"], errors="coerce").fillna(0)
     df["dii_holding_pct"] = pd.to_numeric(df["dii_holding_pct"], errors="coerce").fillna(0)
 
-    # Sort by quarter descending within each symbol
-    df = df.sort_values(["symbol", "quarter"], ascending=[True, False])
+    # Sort by quarter ascending within each symbol (oldest first)
+    df = df.sort_values(["symbol", "quarter"], ascending=[True, True])
 
     results = []
     for symbol, grp in df.groupby("symbol"):
-        grp = grp.reset_index(drop=True)
+        grp = grp.dropna(subset=["promoter_holding_pct"]).reset_index(drop=True)
         if len(grp) < 2:
             continue
 
-        latest = grp.iloc[0]
-        # Compare with ~2 quarters back (index 2 if available, else last)
-        older_idx = min(2, len(grp) - 1)
-        older = grp.iloc[older_idx]
+        holdings = grp["promoter_holding_pct"].tolist()
+        quarters = grp["quarter"].tolist()
 
-        current_pct = latest["promoter_holding_pct"]
-        old_pct = older["promoter_holding_pct"]
+        # Quarter-over-quarter changes
+        qoq = []
+        for j in range(1, len(holdings)):
+            qoq.append(round(holdings[j] - holdings[j - 1], 2))
 
-        if pd.isna(current_pct) or pd.isna(old_pct):
-            continue
+        # Classify trend
+        ups = sum(1 for c in qoq if c > 0)
+        downs = sum(1 for c in qoq if c < 0)
+        flat = sum(1 for c in qoq if c == 0)
 
-        change = current_pct - old_pct
+        if ups > 0 and downs == 0:
+            trend = "Steady Increase"
+        elif downs > 0 and ups == 0:
+            trend = "Steady Decrease"
+        elif ups > downs:
+            trend = "Mostly Increasing"
+        elif downs > ups:
+            trend = "Mostly Decreasing"
+        else:
+            trend = "Mixed"
+
+        latest = grp.iloc[-1]
+        oldest = grp.iloc[0]
+        total_change = round(holdings[-1] - holdings[0], 2)
+
+        # Format QoQ as readable string
+        qoq_str = ", ".join("{:+.1f}".format(c) for c in qoq)
 
         results.append({
             "Symbol": symbol,
-            "Promoter Holding %": round(current_pct, 1),
-            "6M Change %": round(change, 2),
+            "Promoter %": round(latest["promoter_holding_pct"], 1),
+            "6M Change %": total_change,
+            "Trend": trend,
+            "QoQ Changes": qoq_str,
             "Pledge %": round(latest["pledge_pct"], 1),
             "FII %": round(latest["fii_holding_pct"], 1),
             "DII %": round(latest["dii_holding_pct"], 1),
-            "Quarter": latest["quarter"],
+            "Quarters": len(quarters),
         })
 
     if not results:
         return empty
 
-    result_df = pd.DataFrame(results)
+    return pd.DataFrame(results).sort_values(
+        "6M Change %", ascending=False
+    ).reset_index(drop=True)
 
-    if min_change is not None:
-        result_df = result_df[result_df["6M Change %"].abs() >= min_change]
 
-    result_df = result_df.sort_values("6M Change %", ascending=True).reset_index(drop=True)
-    return result_df
+def screen_high_pledge(promoter_df, threshold_pct=20.0):
+    """Filter stocks with high promoter pledge percentage."""
+    empty = pd.DataFrame(columns=["Symbol", "Promoter Holding %", "Pledge %"])
+
+    if promoter_df is None or promoter_df.empty:
+        return empty
+
+    df = promoter_df.copy()
+    df["promoter_holding_pct"] = pd.to_numeric(df["promoter_holding_pct"], errors="coerce")
+    df["pledge_pct"] = pd.to_numeric(df["pledge_pct"], errors="coerce").fillna(0)
+
+    # Get latest quarter per symbol
+    df = df.sort_values(["symbol", "quarter"], ascending=[True, False])
+    latest = df.groupby("symbol").first().reset_index()
+
+    high = latest[latest["pledge_pct"] >= threshold_pct].copy()
+    if high.empty:
+        return empty
+
+    result = pd.DataFrame({
+        "Symbol": high["symbol"],
+        "Promoter Holding %": high["promoter_holding_pct"].round(1),
+        "Pledge %": high["pledge_pct"].round(1),
+    }).sort_values("Pledge %", ascending=False).reset_index(drop=True)
+
+    return result
