@@ -198,6 +198,10 @@ def _cached_vix():
     except Exception:
         return None
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def _cached_promoter_data():
+    return fetch_promoter_data()
+
 # ---------------------------------------------------------------------------
 # Data
 # ---------------------------------------------------------------------------
@@ -622,10 +626,13 @@ elif screen == "Promoter Holdings":
 
     st.caption("Covers Nifty 500 stocks only for faster loading.")
 
-    _cb, _done = _loading_bar()
-    promoter_df = fetch_promoter_data(progress_callback=_cb)
+    promoter_df = _cached_promoter_data()
+    if promoter_df is None or promoter_df.empty:
+        _cb, _done = _loading_bar()
+        promoter_df = fetch_promoter_data(progress_callback=_cb)
+        _done()
+        _cached_promoter_data.clear()
     all_promo = screen_promoter_holdings(promoter_df)
-    _done()
 
     _pct_cols = ["Promoter %", "6M Change %", "Pledge %", "FII %", "DII %"]
     promo_inc, promo_dec = st.tabs(["Increasing Stake", "Decreasing Stake"])
@@ -768,10 +775,8 @@ elif screen == "Warning Signs":
             st.info("No stocks below all moving averages.")
 
     with warn4:
-        _cb, _done = _loading_bar()
-        promoter_df = fetch_promoter_data(progress_callback=_cb)
+        promoter_df = _cached_promoter_data()
         pledge_df = screen_high_pledge(promoter_df, threshold_pct=pledge_thresh)
-        _done()
         st.caption(f"{len(pledge_df)} stocks found")
         if not pledge_df.empty:
             display_df = enrich_with_info(pledge_df.copy())
