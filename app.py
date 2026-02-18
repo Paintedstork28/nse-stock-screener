@@ -146,6 +146,24 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+def _loading_bar():
+    """Create a labeled loading bar. Returns (callback, cleanup) functions."""
+    label = st.markdown('<div class="loading-label">Loading data...</div>',
+                        unsafe_allow_html=True)
+    bar = st.progress(0)
+
+    def callback(pct, msg):
+        clamped = min(pct, 1.0)
+        pct_str = str(int(clamped * 100)) + "%"
+        bar.progress(clamped, text=pct_str + " — " + msg)
+
+    def cleanup():
+        label.empty()
+        bar.empty()
+
+    return callback, cleanup
+
+
 # ---------------------------------------------------------------------------
 # Smart startup: restore from parquet cache + fetch only missing days
 # ---------------------------------------------------------------------------
@@ -287,24 +305,6 @@ def fmt_vol_col(df, cols):
         if c in df.columns:
             df[c] = df[c].apply(lambda v: f"{int(v):,}" if pd.notna(v) else "—")
     return df
-
-
-def _loading_bar():
-    """Create a labeled loading bar. Returns (callback, cleanup) functions."""
-    label = st.markdown('<div class="loading-label">Loading data...</div>',
-                        unsafe_allow_html=True)
-    bar = st.progress(0)
-
-    def callback(pct, msg):
-        clamped = min(pct, 1.0)
-        pct_str = str(int(clamped * 100)) + "%"
-        bar.progress(clamped, text=pct_str + " — " + msg)
-
-    def cleanup():
-        label.empty()
-        bar.empty()
-
-    return callback, cleanup
 
 
 # ---------------------------------------------------------------------------
