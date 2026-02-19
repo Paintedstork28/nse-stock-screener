@@ -95,6 +95,25 @@ st.markdown("""
     .stSlider [data-baseweb="slider"] {
         background-color: #2a2a3e;
     }
+    .stSlider {
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+    }
+    .stSlider [data-testid="stThumbValue"] {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #00d9a3 !important;
+    }
+    .stSlider [data-baseweb="slider"] [role="slider"] {
+        background-color: #00d9a3 !important;
+        border-color: #00d9a3 !important;
+    }
+    .stSlider [data-baseweb="slider"] [data-testid="stTickBarMin"],
+    .stSlider [data-baseweb="slider"] [data-testid="stTickBarMax"] {
+        font-size: 0.7rem;
+        color: #a8a8b8;
+        padding-top: 0.25rem;
+    }
 
     /* Progress bar — orange fill on grey track */
     .stProgress > div > div > div > div {
@@ -403,7 +422,7 @@ if ohlcv.empty:
 if screen == "Price Drops":
     from src.screener_price import screen_big_drops
 
-    drop_threshold = st.slider("Minimum drop from 6M high (%)", 10, 50, 20, 5, key="drop_thresh")
+    drop_threshold = st.slider("Minimum drop from 6M high", 10, 50, 20, 5, format="%d%%", key="drop_thresh")
 
     with st.spinner("Screening..."):
         drops_df = screen_big_drops(ohlcv, threshold_pct=drop_threshold)
@@ -444,7 +463,7 @@ if screen == "Price Drops":
 elif screen == "Sideways Movers":
     from src.screener_price import screen_range_bound
 
-    range_width = st.slider("Max range width (%)", 2, 15, 5, 1, key="range_width")
+    range_width = st.slider("Max range width", 2, 15, 5, 1, format="%d%%", key="range_width")
     min_range_days = st.slider("Minimum days in range", 5, 30, 10, 5, key="range_days")
 
     with st.spinner("Screening..."):
@@ -471,7 +490,7 @@ elif screen == "Sideways Movers":
 elif screen == "Volume Buzz":
     from src.screener_volume import screen_volume_spikes
 
-    vol_threshold = st.slider("Volume above average (%)", 25, 200, 50, 25, key="vol_thresh")
+    vol_threshold = st.slider("Volume above average", 25, 200, 50, 25, format="%d%%", key="vol_thresh")
     consec_days = st.slider("Consecutive high-volume days", 1, 15, 10, 1, key="vol_days")
 
     with st.spinner("Screening..."):
@@ -508,10 +527,10 @@ elif screen == "Price-Volume Intersection":
     from src.screener_price import screen_big_drops
     from src.screener_volume import screen_volume_spikes
 
-    int_drop = st.slider("Minimum drop from 6M high (%)", 10, 50, 20, 5, key="int_drop")
+    int_drop = st.slider("Minimum drop from 6M high", 10, 50, 20, 5, format="%d%%", key="int_drop")
     _pv_col1, _pv_col2 = st.columns(2)
     with _pv_col1:
-        int_vol = st.slider("Volume above average (%)", 25, 200, 50, 25, key="int_vol")
+        int_vol = st.slider("Volume above average", 25, 200, 50, 25, format="%d%%", key="int_vol")
     with _pv_col2:
         int_days = st.slider("Consecutive high-volume days", 1, 15, 3, 1, key="int_days")
 
@@ -566,7 +585,7 @@ elif screen == "Big Player Activity":
     from src.screener_smart_money import (get_bulk_deals_summary,
                                            screen_delivery_breakouts, screen_obv_divergence)
 
-    delivery_mult = st.slider("Delivery multiplier (x times average)", 1.5, 5.0, 2.0, 0.5, key="deliv_mult")
+    delivery_mult = st.slider("Delivery multiplier (vs average)", 1.5, 5.0, 2.0, 0.5, format="%.1fx", key="deliv_mult")
 
     sub1, sub2, sub3 = st.tabs(["Bulk Deals", "Delivery Breakouts", "OBV Accumulation"])
 
@@ -638,8 +657,8 @@ elif screen == "Promoter Holdings":
     promo_inc, promo_dec = st.tabs(["Increasing Stake", "Decreasing Stake"])
 
     with promo_inc:
-        min_inc = st.slider("Minimum increase in holding (%)", 0.0, 10.0, 1.0, 0.5,
-                            key="promo_inc")
+        min_inc = st.slider("Minimum increase in holding", 0.0, 10.0, 1.0, 0.5,
+                            format="%.1f%%", key="promo_inc")
         inc_df = all_promo[
             (all_promo["6M Change %"] >= min_inc)
             & (all_promo["Trend"].isin(["Steady Increase", "Mostly Increasing"]))
@@ -653,8 +672,8 @@ elif screen == "Promoter Holdings":
             st.info("No stocks with steady promoter stake increase above this threshold.")
 
     with promo_dec:
-        min_dec = st.slider("Minimum decrease in holding (%)", 0.0, 10.0, 1.0, 0.5,
-                            key="promo_dec")
+        min_dec = st.slider("Minimum decrease in holding", 0.0, 10.0, 1.0, 0.5,
+                            format="%.1f%%", key="promo_dec")
         dec_df = all_promo[
             (all_promo["6M Change %"] <= -min_dec)
             & (all_promo["Trend"].isin(["Steady Decrease", "Mostly Decreasing"]))
@@ -733,7 +752,7 @@ elif screen == "Warning Signs":
     from src.screener_red_flags import (screen_high_pledge, screen_death_cross,
                                          screen_falling_delivery, screen_below_all_mas)
 
-    pledge_thresh = st.slider("Minimum pledge % (High Pledging tab)", 5, 50, 20, 5, key="pledge_thresh")
+    pledge_thresh = st.slider("Minimum pledge (High Pledging tab)", 5, 50, 20, 5, format="%d%%", key="pledge_thresh")
 
     warn1, warn2, warn3, warn4 = st.tabs([
         "Death Cross", "Speculative Rallies", "Below All MAs", "High Pledging"
