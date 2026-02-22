@@ -101,6 +101,7 @@ def restore_from_parquet():
             # Filter out stale data
             cutoff = (dt.date.today() - dt.timedelta(days=LOOKBACK_MONTHS * 30 + 15)).isoformat()
             df = df[df["trade_date"] >= cutoff]
+            df = df.drop_duplicates(subset=["symbol", "trade_date"], keep="last")
             df.to_sql("ohlcv", conn, if_exists="append", index=False, method="multi")
             conn.commit()
             restored = len(df)
@@ -355,8 +356,21 @@ def load_all_data(progress_callback=None) -> bool:
 
         df = _download_bhavcopy_jugaad(trade_date)
         if df is not None and len(df) > 0:
-            df.to_sql("ohlcv", conn, if_exists="append", index=False,
-                       method="multi")
+            df = df.drop_duplicates(subset=["symbol", "trade_date"], keep="last")
+            try:
+                df.to_sql("ohlcv", conn, if_exists="append", index=False,
+                           method="multi")
+            except sqlite3.IntegrityError:
+                # Duplicate rows with existing data — insert one by one, skip dupes
+                for _, row in df.iterrows():
+                    try:
+                        conn.execute(
+                            "INSERT OR IGNORE INTO ohlcv VALUES (?,?,?,?,?,?,?,?,?)",
+                            tuple(row),
+                        )
+                    except Exception:
+                        pass
+                conn.commit()
             success_count += 1
         else:
             pass  # Skip silently — could be a holiday or unavailable date
