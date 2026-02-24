@@ -7,7 +7,7 @@ import sqlite3
 import pandas as pd
 import requests
 
-from src.data_fetcher import get_db
+from src.data_fetcher import get_db, save_corporate_actions, get_corporate_actions
 
 _NSE_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -404,6 +404,89 @@ def fetch_sector_indices(days: int = 180, progress_callback=None) -> pd.DataFram
     conn.close()
     if progress_callback:
         progress_callback(1.0, "Sector data ready")
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Corporate actions (splits, bonuses, rights)
+# ---------------------------------------------------------------------------
+
+def fetch_corporate_actions(progress_callback=None):
+    """Fetch corporate actions (splits, bonuses, rights) from NSE for the last 6 months."""
+    conn = get_db()
+
+    if progress_callback:
+        progress_callback(0.1, "Checking cached corporate actions...")
+
+    # Return cache if we have data
+    cached = get_corporate_actions(conn)
+    if not cached.empty:
+        conn.close()
+        if progress_callback:
+            progress_callback(1.0, "Corporate actions loaded from cache")
+        return cached
+
+    if progress_callback:
+        progress_callback(0.3, "Fetching corporate actions from NSE...")
+
+    today = dt.date.today()
+    from_date = today - dt.timedelta(days=180)
+    from_str = from_date.strftime("%d-%m-%Y")
+    to_str = today.strftime("%d-%m-%Y")
+
+    try:
+        session = _nse_session()
+        url = (
+            "https://www.nseindia.com/api/corporates-corporateActions"
+            "?index=equities&from_date=" + from_str + "&to_date=" + to_str
+        )
+        resp = session.get(url, timeout=15)
+        if resp.status_code == 200:
+            data = resp.json()
+            keywords = ("split", "bonus", "rights")
+            rows = []
+            for item in data:
+                subject = str(item.get("subject", "")).lower()
+                if not any(k in subject for k in keywords):
+                    continue
+                symbol = str(item.get("symbol", "")).strip()
+                ex_date_str = item.get("exDate", "")
+                # Determine action type
+                if "split" in subject:
+                    action_type = "Split"
+                elif "bonus" in subject:
+                    action_type = "Bonus"
+                else:
+                    action_type = "Rights"
+                # Parse ex_date
+                try:
+                    ex_date = dt.datetime.strptime(ex_date_str, "%d-%b-%Y").date().isoformat()
+                except Exception:
+                    try:
+                        ex_date = dt.datetime.strptime(ex_date_str, "%d-%m-%Y").date().isoformat()
+                    except Exception:
+                        continue
+                details = str(item.get("subject", "")).strip()
+                if symbol and ex_date:
+                    rows.append({
+                        "symbol": symbol,
+                        "ex_date": ex_date,
+                        "action_type": action_type,
+                        "details": details,
+                    })
+
+            if rows:
+                save_corporate_actions(rows, conn)
+    except Exception:
+        pass
+
+    if progress_callback:
+        progress_callback(0.9, "Loading corporate actions...")
+
+    result = get_corporate_actions(conn)
+    conn.close()
+    if progress_callback:
+        progress_callback(1.0, "Corporate actions ready")
     return result
 
 

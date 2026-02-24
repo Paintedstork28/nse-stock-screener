@@ -19,7 +19,8 @@ from src.data_fetcher import (load_all_data, get_ohlcv_df, get_last_updated,
                                get_db, get_data_window, fetch_stock_info,
                                restore_from_parquet, save_ohlcv_parquet)
 from src.data_extras import (fetch_fii_dii_data, fetch_bulk_deals, fetch_promoter_data,
-                              fetch_sector_indices, get_india_vix)
+                              fetch_sector_indices, get_india_vix,
+                              fetch_corporate_actions)
 
 # ---------------------------------------------------------------------------
 # Custom CSS for clean professional look
@@ -239,6 +240,50 @@ def _cached_vix():
 def _cached_promoter_data():
     return fetch_promoter_data()
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def _cached_corp_actions():
+    return fetch_corporate_actions()
+
+
+def _highlight_corp_action(val):
+    """Amber text for non-empty Corp Action cells."""
+    if val and str(val).strip():
+        return "color: #ffa502; font-weight: 600"
+    return ""
+
+
+def add_corp_action_col(df, corp_actions_df, symbol_col="Symbol"):
+    """Add a 'Corp Action' column after 'Sector' with split/bonus/rights flags."""
+    if corp_actions_df is None or corp_actions_df.empty or df.empty:
+        return df
+
+    # Build lookup: symbol -> formatted string
+    lookup = {}
+    for _, row in corp_actions_df.iterrows():
+        sym = row["symbol"]
+        try:
+            ex_dt = pd.to_datetime(row["ex_date"]).strftime("%d-%b")
+        except Exception:
+            ex_dt = str(row["ex_date"])
+        label = "{} ({})".format(row["action_type"], ex_dt)
+        if sym in lookup:
+            lookup[sym] = lookup[sym] + " | " + label
+        else:
+            lookup[sym] = label
+
+    flags = df[symbol_col].map(lookup).fillna("")
+
+    # Insert after Sector if it exists, else after Company, else at end
+    if "Sector" in df.columns:
+        pos = df.columns.get_loc("Sector") + 1
+    elif "Company" in df.columns:
+        pos = df.columns.get_loc("Company") + 1
+    else:
+        pos = len(df.columns)
+    df.insert(pos, "Corp Action", flags.values)
+    return df
+
+
 # ---------------------------------------------------------------------------
 # Data
 # ---------------------------------------------------------------------------
@@ -352,6 +397,9 @@ with st.sidebar:
         if success:
             load_cached_ohlcv.clear()
             load_stock_info.clear()
+            _cached_vix.clear()
+            _cached_promoter_data.clear()
+            _cached_corp_actions.clear()
             st.rerun()
         else:
             st.error("Some data may not have loaded.")
@@ -406,6 +454,7 @@ with st.sidebar:
 
 ohlcv = load_cached_ohlcv()
 stock_info = load_stock_info()
+corp_actions = _cached_corp_actions()
 
 if ohlcv.empty:
     st.warning(
@@ -431,6 +480,7 @@ if screen == "Price Drops":
 
     if not drops_df.empty:
         display_df = enrich_with_info(drops_df.copy())
+        display_df = add_corp_action_col(display_df, corp_actions)
         display_df = fmt_price_col(display_df, ["Current Price", "6M High"])
         display_df = fmt_pct_col(display_df, ["Drop %"])
         display_df = fmt_num_col(display_df, ["RSI"])
@@ -449,6 +499,8 @@ if screen == "Price Drops":
             return ""
 
         styled = display_df.style.map(highlight_rsi, subset=["RSI"])
+        if "Corp Action" in display_df.columns:
+            styled = styled.map(_highlight_corp_action, subset=["Corp Action"])
         st.dataframe(styled, width="stretch", hide_index=True)
     else:
         st.info("No stocks match the current threshold. Try lowering it.")
@@ -473,10 +525,15 @@ elif screen == "Sideways Movers":
 
     if not range_df.empty:
         display_df = enrich_with_info(range_df.copy())
+        display_df = add_corp_action_col(display_df, corp_actions)
         display_df = fmt_price_col(display_df, ["Range Low", "Range High", "Midpoint"])
         display_df = fmt_pct_col(display_df, ["Range Width %"])
         display_df = fmt_num_col(display_df, ["BB Bandwidth"])
-        st.dataframe(display_df, width="stretch", hide_index=True)
+        if "Corp Action" in display_df.columns:
+            styled = display_df.style.map(_highlight_corp_action, subset=["Corp Action"])
+            st.dataframe(styled, width="stretch", hide_index=True)
+        else:
+            st.dataframe(display_df, width="stretch", hide_index=True)
     else:
         st.info("No range-bound stocks found. Try widening the range threshold.")
 
@@ -501,6 +558,7 @@ elif screen == "Volume Buzz":
 
     if not vol_df.empty:
         display_df = enrich_with_info(vol_df.copy())
+        display_df = add_corp_action_col(display_df, corp_actions)
         display_df = fmt_price_col(display_df, ["Current Price"])
         display_df = fmt_vol_col(display_df, ["Avg Volume", f"Last {consec_days}D Avg Vol"])
         display_df = fmt_num_col(display_df, ["Vol Ratio"])
@@ -512,6 +570,8 @@ elif screen == "Volume Buzz":
             return ""
 
         styled = display_df.style.map(highlight_delivery, subset=["Delivery Above Avg"])
+        if "Corp Action" in display_df.columns:
+            styled = styled.map(_highlight_corp_action, subset=["Corp Action"])
         st.dataframe(styled, width="stretch", hide_index=True)
     else:
         st.info("No volume spikes detected. Try lowering the threshold.")
@@ -557,6 +617,7 @@ elif screen == "Price-Volume Intersection":
             merged = merged.sort_values("Drop %")
 
             display_df = enrich_with_info(merged)
+            display_df = add_corp_action_col(display_df, corp_actions)
             display_df = fmt_price_col(display_df, ["Current Price", "6M High"])
             display_df = fmt_pct_col(display_df, ["Drop %", "Price Change %"])
             display_df = fmt_num_col(display_df, ["RSI", "Vol Ratio"])
@@ -567,6 +628,8 @@ elif screen == "Price-Volume Intersection":
                 return ""
 
             styled = display_df.style.map(highlight_intersection, subset=["Delivery Above Avg"])
+            if "Corp Action" in display_df.columns:
+                styled = styled.map(_highlight_corp_action, subset=["Corp Action"])
             st.dataframe(styled, width="stretch", hide_index=True)
         else:
             st.info("No stocks currently appear in both Price Drops and Volume Buzz. "
@@ -598,11 +661,16 @@ elif screen == "Big Player Activity":
             display_df = bulk_df.copy()
             if "Symbol" in display_df.columns:
                 display_df = enrich_with_info(display_df)
+                display_df = add_corp_action_col(display_df, corp_actions)
             if "Price" in display_df.columns:
                 display_df = fmt_price_col(display_df, ["Price"])
             if "Qty" in display_df.columns:
                 display_df = fmt_vol_col(display_df, ["Qty"])
-            st.dataframe(display_df, width="stretch", hide_index=True)
+            if "Corp Action" in display_df.columns:
+                styled = display_df.style.map(_highlight_corp_action, subset=["Corp Action"])
+                st.dataframe(styled, width="stretch", hide_index=True)
+            else:
+                st.dataframe(display_df, width="stretch", hide_index=True)
         else:
             st.info("No bulk deals data available. Click Refresh Data to fetch.")
 
@@ -612,11 +680,16 @@ elif screen == "Big Player Activity":
         st.caption(f"{len(delivery_df)} stocks found")
         if not delivery_df.empty:
             display_df = enrich_with_info(delivery_df.copy())
+            display_df = add_corp_action_col(display_df, corp_actions)
             display_df = fmt_price_col(display_df, ["Price"])
             display_df = fmt_vol_col(display_df, ["Avg Delivery Qty", "Recent Delivery Qty"])
             display_df = fmt_num_col(display_df, ["Delivery Ratio"])
             display_df = fmt_pct_col(display_df, ["Price Change %"])
-            st.dataframe(display_df, width="stretch", hide_index=True)
+            if "Corp Action" in display_df.columns:
+                styled = display_df.style.map(_highlight_corp_action, subset=["Corp Action"])
+                st.dataframe(styled, width="stretch", hide_index=True)
+            else:
+                st.dataframe(display_df, width="stretch", hide_index=True)
         else:
             st.info("No delivery breakouts found.")
 
@@ -626,9 +699,14 @@ elif screen == "Big Player Activity":
         st.caption(f"{len(obv_df)} stocks found")
         if not obv_df.empty:
             display_df = enrich_with_info(obv_df.copy())
+            display_df = add_corp_action_col(display_df, corp_actions)
             display_df = fmt_price_col(display_df, ["Price"])
             display_df = fmt_pct_col(display_df, ["Price Change %"])
-            st.dataframe(display_df, width="stretch", hide_index=True)
+            if "Corp Action" in display_df.columns:
+                styled = display_df.style.map(_highlight_corp_action, subset=["Corp Action"])
+                st.dataframe(styled, width="stretch", hide_index=True)
+            else:
+                st.dataframe(display_df, width="stretch", hide_index=True)
         else:
             st.info("No OBV divergences detected.")
 
@@ -764,8 +842,13 @@ elif screen == "Warning Signs":
         st.caption(f"{len(death_df)} stocks found")
         if not death_df.empty:
             display_df = enrich_with_info(death_df.copy())
+            display_df = add_corp_action_col(display_df, corp_actions)
             display_df = fmt_price_col(display_df, ["Price", "50 DMA", "200 DMA"])
-            st.dataframe(display_df, width="stretch", hide_index=True)
+            if "Corp Action" in display_df.columns:
+                styled = display_df.style.map(_highlight_corp_action, subset=["Corp Action"])
+                st.dataframe(styled, width="stretch", hide_index=True)
+            else:
+                st.dataframe(display_df, width="stretch", hide_index=True)
         else:
             st.info("No recent death crosses detected.")
 
@@ -775,9 +858,14 @@ elif screen == "Warning Signs":
         st.caption(f"{len(spec_df)} stocks found")
         if not spec_df.empty:
             display_df = enrich_with_info(spec_df.copy())
+            display_df = add_corp_action_col(display_df, corp_actions)
             display_df = fmt_price_col(display_df, ["Price"])
             display_df = fmt_pct_col(display_df, ["Price Change %", "Delivery % Start", "Delivery % End"])
-            st.dataframe(display_df, width="stretch", hide_index=True)
+            if "Corp Action" in display_df.columns:
+                styled = display_df.style.map(_highlight_corp_action, subset=["Corp Action"])
+                st.dataframe(styled, width="stretch", hide_index=True)
+            else:
+                st.dataframe(display_df, width="stretch", hide_index=True)
         else:
             st.info("No speculative rallies detected.")
 
@@ -787,9 +875,14 @@ elif screen == "Warning Signs":
         st.caption(f"{len(below_df)} stocks found")
         if not below_df.empty:
             display_df = enrich_with_info(below_df.copy())
+            display_df = add_corp_action_col(display_df, corp_actions)
             display_df = fmt_price_col(display_df, ["Price", "20 DMA", "50 DMA", "200 DMA"])
             display_df = fmt_pct_col(display_df, ["Below 200 DMA %"])
-            st.dataframe(display_df, width="stretch", hide_index=True)
+            if "Corp Action" in display_df.columns:
+                styled = display_df.style.map(_highlight_corp_action, subset=["Corp Action"])
+                st.dataframe(styled, width="stretch", hide_index=True)
+            else:
+                st.dataframe(display_df, width="stretch", hide_index=True)
         else:
             st.info("No stocks below all moving averages.")
 

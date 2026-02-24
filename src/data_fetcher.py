@@ -52,11 +52,44 @@ def _create_tables(conn: sqlite3.Connection):
             close REAL,
             PRIMARY KEY (index_name, trade_date)
         );
+        CREATE TABLE IF NOT EXISTS corporate_actions (
+            symbol TEXT,
+            ex_date DATE,
+            action_type TEXT,
+            details TEXT,
+            PRIMARY KEY (symbol, ex_date)
+        );
         CREATE TABLE IF NOT EXISTS metadata (
             key TEXT PRIMARY KEY,
             value TEXT
         );
     """)
+
+
+def save_corporate_actions(rows, conn):
+    """Insert or replace corporate action rows into SQLite.
+
+    Args:
+        rows: list of dicts with keys: symbol, ex_date, action_type, details
+        conn: SQLite connection
+    """
+    for r in rows:
+        conn.execute(
+            "INSERT OR REPLACE INTO corporate_actions (symbol, ex_date, action_type, details) "
+            "VALUES (?, ?, ?, ?)",
+            (r["symbol"], r["ex_date"], r["action_type"], r["details"]),
+        )
+    conn.commit()
+
+
+def get_corporate_actions(conn):
+    """Load corporate actions from the last 6 months."""
+    cutoff = (dt.date.today() - dt.timedelta(days=180)).isoformat()
+    df = pd.read_sql(
+        "SELECT symbol, ex_date, action_type, details FROM corporate_actions WHERE ex_date >= ?",
+        conn, params=(cutoff,),
+    )
+    return df
 
 
 # ---------------------------------------------------------------------------
