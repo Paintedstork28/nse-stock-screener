@@ -7,7 +7,7 @@ import sqlite3
 import pandas as pd
 import requests
 
-from src.data_fetcher import get_db, save_corporate_actions, get_corporate_actions
+from src.data_fetcher import get_db
 
 _NSE_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -413,6 +413,8 @@ def fetch_sector_indices(days: int = 180, progress_callback=None) -> pd.DataFram
 
 def fetch_corporate_actions(progress_callback=None):
     """Fetch corporate actions (splits, bonuses, rights) from NSE for the last 6 months."""
+    from src.data_fetcher import save_corporate_actions, get_corporate_actions
+
     conn = get_db()
 
     if progress_callback:
