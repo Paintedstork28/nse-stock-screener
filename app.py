@@ -263,7 +263,13 @@ def add_corp_action_col(df, corp_actions_df, symbol_col="Symbol"):
         for _, row in corp_actions_df.iterrows():
             sym = row["symbol"]
             try:
-                ex_dt = pd.to_datetime(row["ex_date"]).strftime("%d-%b")
+                dt = pd.to_datetime(row["ex_date"])
+                day = dt.day
+                if 11 <= day <= 13:
+                    suffix = "th"
+                else:
+                    suffix = {1: "st", 2: "nd", 3: "rd"}.get(day % 10, "th")
+                ex_dt = "{}{}  {} {}".format(day, suffix, dt.strftime("%B"), dt.year)
             except Exception:
                 ex_dt = str(row["ex_date"])
             label = "{} ({})".format(row["action_type"], ex_dt)
@@ -437,7 +443,6 @@ with st.sidebar:
     st.markdown("**Data Cuts**")
     screen = st.radio("Screen", [
         "Price Drops",
-        "Sideways Movers",
         "Volume Buzz",
         "Price-Volume Intersection",
         "Big Player Activity",
@@ -511,38 +516,6 @@ if screen == "Price Drops":
             "**Drop %** — How much the stock fell from its 6-month high\n\n"
             "**RSI** — Below 30 (green) = oversold, may bounce. Above 70 (red) = overbought.\n\n"
             "Look for large drop + RSI below 30 for potential value picks."
-        )
-
-elif screen == "Sideways Movers":
-    from src.screener_price import screen_range_bound
-
-    range_width = st.slider("Max range width", 2, 15, 5, 1, format="%d%%", key="range_width")
-    min_range_days = st.slider("Minimum days in range", 5, 30, 10, 5, key="range_days")
-
-    with st.spinner("Screening..."):
-        range_df = screen_range_bound(ohlcv, range_pct=range_width, min_days=min_range_days)
-
-    st.caption(f"{len(range_df)} stocks found")
-
-    if not range_df.empty:
-        display_df = enrich_with_info(range_df.copy())
-        display_df = add_corp_action_col(display_df, corp_actions)
-        display_df = fmt_price_col(display_df, ["Range Low", "Range High", "Midpoint"])
-        display_df = fmt_pct_col(display_df, ["Range Width %"])
-        display_df = fmt_num_col(display_df, ["BB Bandwidth"])
-        if "Corp Action" in display_df.columns:
-            styled = display_df.style.map(_highlight_corp_action, subset=["Corp Action"])
-            st.dataframe(styled, width="stretch", hide_index=True)
-        else:
-            st.dataframe(display_df, width="stretch", hide_index=True)
-    else:
-        st.info("No range-bound stocks found. Try widening the range threshold.")
-
-    with st.expander("How to read this"):
-        st.markdown(
-            "**Range Width %** — How tight the range is (smaller = more compressed)\n\n"
-            "**BB Bandwidth** — Lower = tighter squeeze = breakout more likely\n\n"
-            "**Days in Range** — Longer compression often leads to stronger breakouts."
         )
 
 elif screen == "Volume Buzz":
