@@ -254,22 +254,23 @@ def _highlight_corp_action(val):
 
 def add_corp_action_col(df, corp_actions_df, symbol_col="Symbol"):
     """Add a 'Corp Action' column after 'Sector' with split/bonus/rights flags."""
-    if corp_actions_df is None or corp_actions_df.empty or df.empty:
+    if df.empty:
         return df
 
     # Build lookup: symbol -> formatted string
     lookup = {}
-    for _, row in corp_actions_df.iterrows():
-        sym = row["symbol"]
-        try:
-            ex_dt = pd.to_datetime(row["ex_date"]).strftime("%d-%b")
-        except Exception:
-            ex_dt = str(row["ex_date"])
-        label = "{} ({})".format(row["action_type"], ex_dt)
-        if sym in lookup:
-            lookup[sym] = lookup[sym] + " | " + label
-        else:
-            lookup[sym] = label
+    if corp_actions_df is not None and not corp_actions_df.empty:
+        for _, row in corp_actions_df.iterrows():
+            sym = row["symbol"]
+            try:
+                ex_dt = pd.to_datetime(row["ex_date"]).strftime("%d-%b")
+            except Exception:
+                ex_dt = str(row["ex_date"])
+            label = "{} ({})".format(row["action_type"], ex_dt)
+            if sym in lookup:
+                lookup[sym] = lookup[sym] + " | " + label
+            else:
+                lookup[sym] = label
 
     flags = df[symbol_col].map(lookup).fillna("")
 
@@ -618,6 +619,12 @@ elif screen == "Price-Volume Intersection":
 
             display_df = enrich_with_info(merged)
             display_df = add_corp_action_col(display_df, corp_actions)
+
+            # Verdict column based on Corp Action
+            display_df["Verdict"] = display_df["Corp Action"].apply(
+                lambda v: "Signal likely due to corp action" if v and str(v).strip() else "Genuine signal"
+            )
+
             display_df = fmt_price_col(display_df, ["Current Price", "6M High"])
             display_df = fmt_pct_col(display_df, ["Drop %", "Price Change %"])
             display_df = fmt_num_col(display_df, ["RSI", "Vol Ratio"])
@@ -627,9 +634,16 @@ elif screen == "Price-Volume Intersection":
                     return "background-color: #008f4d; color: #e8e8f0"
                 return ""
 
+            def _highlight_verdict(val):
+                if val == "Genuine signal":
+                    return "background-color: #008f4d; color: #e8e8f0; font-weight: 600"
+                if val == "Signal likely due to corp action":
+                    return "background-color: #cc8400; color: #e8e8f0; font-weight: 600"
+                return ""
+
             styled = display_df.style.map(highlight_intersection, subset=["Delivery Above Avg"])
-            if "Corp Action" in display_df.columns:
-                styled = styled.map(_highlight_corp_action, subset=["Corp Action"])
+            styled = styled.map(_highlight_corp_action, subset=["Corp Action"])
+            styled = styled.map(_highlight_verdict, subset=["Verdict"])
             st.dataframe(styled, width="stretch", hide_index=True)
         else:
             st.info("No stocks currently appear in both Price Drops and Volume Buzz. "
@@ -641,6 +655,10 @@ elif screen == "Price-Volume Intersection":
         st.markdown(
             "Stocks in **both** Price Drops and Volume Buzz.\n\n"
             "Big drop + volume surge + high delivery = strong accumulation signal.\n\n"
+            "**Verdict** — If a recent corporate action (split, bonus, rights) exists, "
+            "the price drop + volume spike is likely noise from the adjustment, not genuine "
+            "accumulation. Green = no corp action, signal is real. Amber = corp action present, "
+            "treat with caution.\n\n"
             "Always check news to rule out fundamental problems."
         )
 
