@@ -12,7 +12,6 @@ _HEADERS = {
 
 # Index name -> CSV filename on niftyindices.com
 _INDEX_CSV_MAP = {
-    "Nifty Alpha 50": "ind_niftyalpha50list.csv",
     "Nifty 50": "ind_nifty50list.csv",
     "Nifty 100": "ind_nifty100list.csv",
     "Nifty 200": "ind_nifty200list.csv",
