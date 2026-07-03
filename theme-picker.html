@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Screener — Theme Picker</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5; color: #333; padding: 40px 20px;
+            display: flex; flex-direction: column; align-items: center;
+            min-height: 100vh;
+        }
+        h1 { font-size: 1.6rem; margin-bottom: 8px; }
+        .subtitle { color: #666; margin-bottom: 32px; font-size: 0.95rem; }
+        .themes { display: flex; gap: 24px; flex-wrap: wrap; justify-content: center; margin-bottom: 32px; }
+        .theme-card {
+            width: 240px; border-radius: 12px; overflow: hidden;
+            cursor: pointer; transition: transform 0.15s, box-shadow 0.15s;
+            border: 3px solid transparent; background: #fff;
+        }
+        .theme-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
+        .theme-card.selected { border-color: #1a73e8; box-shadow: 0 4px 16px rgba(26,115,232,0.3); }
+        .preview {
+            height: 120px; padding: 16px; display: flex; flex-direction: column;
+            justify-content: space-between;
+        }
+        .preview-bar { height: 10px; border-radius: 4px; width: 60%; }
+        .preview-sidebar { width: 35%; height: 100%; border-radius: 6px; float: left; margin-right: 12px; }
+        .preview-content { display: flex; flex-direction: column; gap: 8px; }
+        .preview-text { height: 8px; border-radius: 3px; }
+        .theme-label { padding: 12px 16px; font-weight: 600; font-size: 0.95rem; text-align: center; }
+
+        .custom-section {
+            background: #fff; border-radius: 12px; padding: 24px; width: 100%;
+            max-width: 560px; margin-bottom: 24px; display: none;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        .custom-section.visible { display: block; }
+        .custom-section h3 { margin-bottom: 16px; font-size: 1.1rem; }
+        .color-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+        .color-row label { font-size: 0.9rem; color: #555; }
+        .color-row input[type="color"] {
+            width: 48px; height: 32px; border: 1px solid #ddd; border-radius: 6px;
+            cursor: pointer; padding: 2px;
+        }
+        .color-row .hex { font-family: monospace; font-size: 0.85rem; color: #888; width: 70px; text-align: right; }
+
+        .output-section {
+            background: #fff; border-radius: 12px; padding: 24px; width: 100%;
+            max-width: 560px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        .output-section h3 { margin-bottom: 4px; font-size: 1.1rem; }
+        .output-section .hint { color: #888; font-size: 0.82rem; margin-bottom: 12px; }
+        pre {
+            background: #1e1e2e; color: #cdd6f4; padding: 16px; border-radius: 8px;
+            font-size: 0.85rem; line-height: 1.6; overflow-x: auto; margin-bottom: 16px;
+            white-space: pre;
+        }
+        .btn-row { display: flex; gap: 12px; }
+        .btn {
+            padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer;
+            font-size: 0.9rem; font-weight: 600; transition: background 0.15s;
+        }
+        .btn-primary { background: #1a73e8; color: #fff; }
+        .btn-primary:hover { background: #1557b0; }
+        .btn-secondary { background: #e8eaed; color: #333; }
+        .btn-secondary:hover { background: #d2d5d9; }
+        .toast {
+            position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+            background: #333; color: #fff; padding: 10px 24px; border-radius: 8px;
+            font-size: 0.9rem; opacity: 0; transition: opacity 0.3s; pointer-events: none;
+        }
+        .toast.show { opacity: 1; }
+        .steps { margin-top: 20px; padding: 0 8px; }
+        .steps li { margin-bottom: 8px; font-size: 0.88rem; color: #555; line-height: 1.5; }
+        .steps code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 0.82rem; }
+    </style>
+</head>
+<body>
+    <h1>Stock Screener — Theme Picker</h1>
+    <p class="subtitle">Choose a theme for your Streamlit app, then copy the config.</p>
+
+    <div class="themes">
+        <!-- Light -->
+        <div class="theme-card" data-theme="light" onclick="selectTheme('light')">
+            <div class="preview" style="background: #ffffff;">
+                <div class="preview-sidebar" style="background: #f0f2f6;"></div>
+                <div class="preview-content">
+                    <div class="preview-bar" style="background: #1a73e8;"></div>
+                    <div class="preview-text" style="background: #e0e0e0; width: 50%;"></div>
+                    <div class="preview-text" style="background: #e0e0e0; width: 80%;"></div>
+                    <div class="preview-text" style="background: #e0e0e0; width: 35%;"></div>
+                </div>
+            </div>
+            <div class="theme-label">Light</div>
+        </div>
+
+        <!-- Dark (current) -->
+        <div class="theme-card" data-theme="dark" onclick="selectTheme('dark')">
+            <div class="preview" style="background: #0d0d1a;">
+                <div class="preview-sidebar" style="background: #1a1a2e;"></div>
+                <div class="preview-content">
+                    <div class="preview-bar" style="background: #00d9a3;"></div>
+                    <div class="preview-text" style="background: #2a2a3e; width: 50%;"></div>
+                    <div class="preview-text" style="background: #2a2a3e; width: 80%;"></div>
+                    <div class="preview-text" style="background: #2a2a3e; width: 35%;"></div>
+                </div>
+            </div>
+            <div class="theme-label">Dark (current)</div>
+        </div>
+
+        <!-- Custom -->
+        <div class="theme-card" data-theme="custom" onclick="selectTheme('custom')">
+            <div class="preview" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                <div class="preview-sidebar" style="background: rgba(255,255,255,0.15);"></div>
+                <div class="preview-content">
+                    <div class="preview-bar" style="background: #fff; width: 40%;"></div>
+                    <div class="preview-text" style="background: rgba(255,255,255,0.2); width: 50%;"></div>
+                    <div class="preview-text" style="background: rgba(255,255,255,0.2); width: 80%;"></div>
+                    <div class="preview-text" style="background: rgba(255,255,255,0.2); width: 35%;"></div>
+                </div>
+            </div>
+            <div class="theme-label">Custom</div>
+        </div>
+    </div>
+
+    <!-- Custom color pickers -->
+    <div class="custom-section" id="customSection">
+        <h3>Custom colors</h3>
+        <div class="color-row">
+            <label>Primary (buttons, links)</label>
+            <input type="color" id="cPrimary" value="#ff6347" oninput="updateCustom()">
+            <span class="hex" id="cPrimaryHex">#ff6347</span>
+        </div>
+        <div class="color-row">
+            <label>Background</label>
+            <input type="color" id="cBg" value="#ffffff" oninput="updateCustom()">
+            <span class="hex" id="cBgHex">#ffffff</span>
+        </div>
+        <div class="color-row">
+            <label>Secondary background</label>
+            <input type="color" id="cSecBg" value="#f0f2f6" oninput="updateCustom()">
+            <span class="hex" id="cSecBgHex">#f0f2f6</span>
+        </div>
+        <div class="color-row">
+            <label>Text</label>
+            <input type="color" id="cText" value="#262730" oninput="updateCustom()">
+            <span class="hex" id="cTextHex">#262730</span>
+        </div>
+    </div>
+
+    <!-- Generated config -->
+    <div class="output-section">
+        <h3>Generated config</h3>
+        <p class="hint">Save this as <code>.streamlit/config.toml</code> in your project root.</p>
+        <pre id="configOutput"></pre>
+        <div class="btn-row">
+            <button class="btn btn-primary" onclick="copyConfig()">Copy to clipboard</button>
+            <button class="btn btn-secondary" onclick="downloadConfig()">Download config.toml</button>
+        </div>
+        <ol class="steps">
+            <li>Copy or download the config above.</li>
+            <li>Place it at <code>stock-screener/.streamlit/config.toml</code> (replace existing file).</li>
+            <li>Restart Streamlit: <code>Ctrl+C</code> then <code>streamlit run app.py</code></li>
+            <li>On Streamlit Cloud: push to GitHub — the app will redeploy automatically.</li>
+        </ol>
+    </div>
+
+    <div class="toast" id="toast">Copied to clipboard!</div>
+
+    <script>
+        const themes = {
+            light: {
+                primaryColor: '#1a73e8',
+                backgroundColor: '#ffffff',
+                secondaryBackgroundColor: '#f0f2f6',
+                textColor: '#262730',
+                font: 'sans serif'
+            },
+            dark: {
+                primaryColor: '#00d9a3',
+                backgroundColor: '#0d0d1a',
+                secondaryBackgroundColor: '#1a1a2e',
+                textColor: '#e8e8f0',
+                font: 'sans serif'
+            },
+            custom: {
+                primaryColor: '#ff6347',
+                backgroundColor: '#ffffff',
+                secondaryBackgroundColor: '#f0f2f6',
+                textColor: '#262730',
+                font: 'sans serif'
+            }
+        };
+
+        let currentTheme = 'dark';
+
+        function buildConfig(t) {
+            return `[theme]\nprimaryColor = "${t.primaryColor}"\nbackgroundColor = "${t.backgroundColor}"\nsecondaryBackgroundColor = "${t.secondaryBackgroundColor}"\ntextColor = "${t.textColor}"\nfont = "${t.font}"\n\n[server]\nheadless = true`;
+        }
+
+        function selectTheme(name) {
+            currentTheme = name;
+            document.querySelectorAll('.theme-card').forEach(c => c.classList.remove('selected'));
+            document.querySelector(`[data-theme="${name}"]`).classList.add('selected');
+            document.getElementById('customSection').classList.toggle('visible', name === 'custom');
+            renderConfig();
+        }
+
+        function updateCustom() {
+            const ids = ['cPrimary', 'cBg', 'cSecBg', 'cText'];
+            const keys = ['primaryColor', 'backgroundColor', 'secondaryBackgroundColor', 'textColor'];
+            ids.forEach((id, i) => {
+                const val = document.getElementById(id).value;
+                themes.custom[keys[i]] = val;
+                document.getElementById(id + 'Hex').textContent = val;
+            });
+            renderConfig();
+        }
+
+        function renderConfig() {
+            document.getElementById('configOutput').textContent = buildConfig(themes[currentTheme]);
+        }
+
+        function copyConfig() {
+            const text = buildConfig(themes[currentTheme]);
+            navigator.clipboard.writeText(text).then(() => {
+                const toast = document.getElementById('toast');
+                toast.classList.add('show');
+                setTimeout(() => toast.classList.remove('show'), 2000);
+            });
+        }
+
+        function downloadConfig() {
+            const text = buildConfig(themes[currentTheme]);
+            const blob = new Blob([text], { type: 'text/plain' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'config.toml';
+            a.click();
+            URL.revokeObjectURL(a.href);
+        }
+
+        // Init: select Dark as current
+        selectTheme('dark');
+    </script>
+</body>
+</html>

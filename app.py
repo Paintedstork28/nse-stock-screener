@@ -30,16 +30,16 @@ st.markdown("""
 <style>
     /* Info cards row */
     .info-card {
-        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-        border: 1px solid #2a2a3e;
+        background: linear-gradient(135deg, #f0f2f6 0%, #e8eaef 100%);
+        border: 1px solid #d0d3da;
         border-radius: 8px;
         padding: 0.7rem 1rem;
         height: 100%;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
     }
     .info-card-label {
         font-size: 0.7rem;
-        color: #a8a8b8;
+        color: #666;
         text-transform: uppercase;
         letter-spacing: 0.5px;
         font-weight: 600;
@@ -47,12 +47,12 @@ st.markdown("""
     }
     .info-card-value {
         font-size: 0.95rem;
-        color: #e8e8f0;
+        color: #262730;
         font-weight: 500;
     }
     .info-card-detail {
         font-size: 0.75rem;
-        color: #7a7a88;
+        color: #888;
         margin-top: 2px;
     }
 
@@ -61,40 +61,40 @@ st.markdown("""
         padding-top: 2.5rem;
     }
 
-    /* Button override — green gradient */
+    /* Button override — blue */
     .stButton > button {
-        background: linear-gradient(135deg, #00d9a3 0%, #00cc6a 100%) !important;
-        color: #0d0d1a !important;
+        background: linear-gradient(135deg, #1a73e8 0%, #1557b0 100%) !important;
+        color: #ffffff !important;
         border: none !important;
         font-weight: 600 !important;
     }
     .stButton > button:hover {
-        background: linear-gradient(135deg, #00cc6a 0%, #00b85c 100%) !important;
+        background: linear-gradient(135deg, #1557b0 0%, #0d47a1 100%) !important;
     }
 
-    /* Dataframe dark background */
+    /* Dataframe border */
     .stDataFrame {
-        border: 1px solid #2a2a3e;
+        border: 1px solid #d0d3da;
         border-radius: 8px;
     }
 
     /* Expander styling */
     .streamlit-expanderHeader {
-        background-color: #1a1a2e !important;
-        color: #a8a8b8 !important;
+        background-color: #f0f2f6 !important;
+        color: #444 !important;
     }
 
     /* Metric styling */
     [data-testid="stMetricValue"] {
-        color: #e8e8f0;
+        color: #262730;
     }
     [data-testid="stMetricLabel"] {
-        color: #a8a8b8;
+        color: #666;
     }
 
     /* Slider styling */
     .stSlider [data-baseweb="slider"] {
-        background-color: #2a2a3e;
+        background-color: #e0e3e8;
     }
     .stSlider {
         padding-left: 0.5rem;
@@ -103,38 +103,38 @@ st.markdown("""
     .stSlider [data-testid="stThumbValue"] {
         font-size: 0.75rem;
         font-weight: 600;
-        color: #00d9a3 !important;
+        color: #1a73e8 !important;
     }
     .stSlider [data-baseweb="slider"] [role="slider"] {
-        background-color: #00d9a3 !important;
-        border-color: #00d9a3 !important;
+        background-color: #1a73e8 !important;
+        border-color: #1a73e8 !important;
     }
     .stSlider [data-baseweb="slider"] [data-testid="stTickBarMin"],
     .stSlider [data-baseweb="slider"] [data-testid="stTickBarMax"] {
         font-size: 0.7rem;
-        color: #a8a8b8;
+        color: #666;
         padding-top: 0.25rem;
     }
 
-    /* Progress bar — orange fill on grey track */
+    /* Progress bar — orange fill on light track */
     .stProgress > div > div > div > div {
         background: linear-gradient(90deg, #ff9f43 0%, #f0932b 100%) !important;
     }
     .stProgress > div > div > div {
-        background-color: #4a4a5e !important;
+        background-color: #d0d3da !important;
     }
     .stProgress [data-testid="stProgressBarFigure"] {
         background: linear-gradient(90deg, #ff9f43 0%, #f0932b 100%) !important;
     }
     .stProgress [role="progressbar"] {
-        background-color: #4a4a5e !important;
+        background-color: #d0d3da !important;
     }
     .stProgress [role="progressbar"] > div {
         background: linear-gradient(90deg, #ff9f43 0%, #f0932b 100%) !important;
     }
     .loading-label {
         font-size: 0.75rem;
-        color: #ff9f43;
+        color: #e67e22;
         font-weight: 600;
         letter-spacing: 0.5px;
         text-transform: uppercase;
@@ -148,20 +148,20 @@ st.markdown("""
 
     /* Subheader styling */
     .stSubheader, h3 {
-        color: #e8e8f0 !important;
+        color: #262730 !important;
     }
 
     /* Tab styling (sub-tabs only) */
     .stTabs [data-baseweb="tab-list"] {
-        background-color: #1a1a2e;
+        background-color: #f0f2f6;
         border-radius: 8px;
     }
     .stTabs [data-baseweb="tab"] {
-        color: #a8a8b8;
+        color: #666;
     }
     .stTabs [aria-selected="true"] {
-        color: #00d9a3 !important;
-        border-bottom-color: #00d9a3 !important;
+        color: #1a73e8 !important;
+        border-bottom-color: #1a73e8 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -449,6 +449,7 @@ with st.sidebar:
         "Promoter Holdings",
         "Sector Map",
         "Warning Signs",
+        "Sharpe Ratio",
     ], label_visibility="collapsed")
 
     pass  # Controls and explanations are in the main area
@@ -894,6 +895,77 @@ elif screen == "Warning Signs":
             "**Speculative Rallies** — Price up but delivery % falling\n\n"
             "**Below All MAs** — Deep downtrend, no support\n\n"
             "**High Pledging** — Promoter shares pledged, crash risk"
+        )
+
+elif screen == "Sharpe Ratio":
+    from src.screener_sharpe import screen_sharpe
+    from src.universe import fetch_universe, UNIVERSE_OPTIONS
+
+    uni_col, rfr_col = st.columns(2)
+    with uni_col:
+        selected_universe = st.selectbox("Universe", UNIVERSE_OPTIONS, index=4, key="sharpe_uni")
+    with rfr_col:
+        risk_free = st.slider("Risk-free rate", 4.0, 12.0, 7.0, 0.5, format="%.1f%%", key="sharpe_rfr")
+
+    dma_col, circ_col = st.columns(2)
+    with dma_col:
+        dma_filter = st.selectbox("Remove below DMA", [200, 100, 50, 10], index=0, key="sharpe_dma")
+    with circ_col:
+        circuit_thresh = st.slider("Max circuit hits", 1, 30, 10, 1, key="sharpe_circ")
+
+    with st.spinner("Fetching universe..."):
+        universe_syms = fetch_universe(selected_universe)
+
+    if not universe_syms:
+        st.warning(f"Could not fetch {selected_universe} constituent list. Try again later.")
+    else:
+        st.caption(f"{selected_universe}: {len(universe_syms)} constituents")
+
+        with st.spinner("Screening..."):
+            sharpe_df = screen_sharpe(
+                ohlcv,
+                universe_symbols=universe_syms,
+                risk_free_rate=risk_free / 100,
+                dma_period=dma_filter,
+                circuit_threshold=circuit_thresh,
+            )
+
+        st.caption(f"{len(sharpe_df)} stocks passed filters")
+
+        if not sharpe_df.empty:
+            display_df = enrich_with_info(sharpe_df.copy())
+            display_df = add_corp_action_col(display_df, corp_actions)
+            display_df = fmt_price_col(display_df, ["Close", "DMA Value"])
+            display_df = fmt_pct_col(display_df, ["Ann. Return", "Ann. Volatility"])
+            display_df = fmt_num_col(display_df, ["Sharpe Ratio"])
+
+            def _color_sharpe(val):
+                try:
+                    v = float(val)
+                except (ValueError, TypeError):
+                    return ""
+                if v >= 1.0:
+                    return "color: #00d9a3; font-weight: 600"
+                if v <= 0:
+                    return "color: #ff6b6b; font-weight: 600"
+                return ""
+
+            styled = display_df.style.map(_color_sharpe, subset=["Sharpe Ratio"])
+            if "Corp Action" in display_df.columns:
+                styled = styled.map(_highlight_corp_action, subset=["Corp Action"])
+            st.dataframe(styled, width="stretch", hide_index=True)
+        else:
+            st.info("No stocks passed the selected filters.")
+
+    with st.expander("How to read this"):
+        st.markdown(
+            "**Sharpe Ratio** — Risk-adjusted return: (annualized return − risk-free rate) / annualized volatility. "
+            "Higher is better. Above 1.0 = strong, below 0 = negative risk-adjusted returns.\n\n"
+            "**Ann. Return** — Annualized return based on daily price changes over the available data window.\n\n"
+            "**Ann. Volatility** — Annualized standard deviation of daily returns. Lower = less volatile.\n\n"
+            "**DMA Filter** — Stocks trading below the selected DMA are removed (bearish trend).\n\n"
+            "**Circuit Hits** — Days where the stock moved exactly ±5%, ±10%, or ±20% (likely hit circuit limits). "
+            "High circuit-hit stocks are illiquid and risky — filtered out above the threshold."
         )
 
 # ---------------------------------------------------------------------------

@@ -145,6 +145,49 @@ def golden_death_cross(close: pd.Series, lookback: int = 5):
     return None
 
 
+def sharpe_ratio(close: pd.Series, risk_free_rate: float = 0.07) -> tuple:
+    """Annualized Sharpe Ratio from daily close prices.
+
+    Args:
+        close: Daily close price series.
+        risk_free_rate: Annual risk-free rate (default 7% for India).
+
+    Returns:
+        (sharpe, annualized_return, annualized_volatility) or (None, None, None)
+        if insufficient data.
+    """
+    daily_returns = close.pct_change().dropna()
+    if len(daily_returns) < 20:
+        return None, None, None
+
+    ann_return = daily_returns.mean() * 252
+    ann_vol = daily_returns.std() * np.sqrt(252)
+    if ann_vol == 0:
+        return None, ann_return, ann_vol
+
+    sharpe = (ann_return - risk_free_rate) / ann_vol
+    return sharpe, ann_return, ann_vol
+
+
+def circuit_hits(close: pd.Series, tolerance: float = 0.001) -> int:
+    """Count days where a stock likely hit a circuit limit.
+
+    Detects daily moves of exactly ±5%, ±10%, or ±20% (within tolerance).
+
+    Args:
+        close: Daily close price series.
+        tolerance: Allowed deviation from exact circuit % (default 0.1%).
+
+    Returns:
+        Number of circuit-hit days.
+    """
+    daily_pct = close.pct_change().dropna().abs()
+    count = 0
+    for limit in [0.05, 0.10, 0.20]:
+        count += int(((daily_pct - limit).abs() <= tolerance).sum())
+    return count
+
+
 def compute_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
     """Add all indicator columns to a single-stock DataFrame.
     Expects columns: close, high, low, volume, delivery_qty.

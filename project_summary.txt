@@ -125,6 +125,22 @@ Total cost: ₹0 — all data sources are free and publicly available.
 - Removed Top Momentum tab
 - Moved Submit Feedback button to the bottom of the page
 
+12. SHARPE RATIO SCREENER (Jul 2026)
+--------------------------------------
+- New "Sharpe Ratio" screen added to the sidebar
+- Configurable universe: Nifty Alpha 50, 50, 100, 200, 500, Midcap 150, Smallcap 250
+  - Constituent lists fetched from niftyindices.com CSVs (new file: src/universe.py)
+- Sharpe Ratio = (annualized return − risk-free rate) / annualized volatility
+  - Risk-free rate: slider 4–12%, default 7%
+  - Uses full available OHLCV data (~6 months)
+- DMA filter: removes stocks trading below selected DMA (200/100/50/10)
+- Circuit hits filter: removes stocks with too many circuit-limit days (±5/10/20%)
+  - Configurable threshold slider (1–30, default 10)
+- New files: src/universe.py (~70 lines), src/screener_sharpe.py (~90 lines)
+- Modified: src/indicators.py (+sharpe_ratio, +circuit_hits functions), app.py (+Sharpe Ratio screen)
+- Standalone theme-picker.html added for switching Streamlit theme (Light/Dark/Custom)
+  - Generates .streamlit/config.toml content — user copies and restarts app
+
 9. SUGGESTED NEXT STEPS
 ------------------------
 - Add stock-level detail view — click a symbol to see its price chart + indicators
