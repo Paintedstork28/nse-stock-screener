@@ -163,6 +163,48 @@ st.markdown("""
         color: #1a73e8 !important;
         border-bottom-color: #1a73e8 !important;
     }
+
+    /* Alert ticker bar */
+    .alert-ticker-bar {
+        background: #1a1a2e;
+        border: 1px solid #16213e;
+        border-radius: 6px;
+        padding: 0.5rem 0;
+        margin-bottom: 1rem;
+        overflow: hidden;
+        position: relative;
+    }
+    .alert-ticker-label {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        background: #e63946;
+        color: #fff;
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        padding: 0.5rem 0.7rem;
+        z-index: 2;
+        display: flex;
+        align-items: center;
+        border-radius: 6px 0 0 6px;
+    }
+    .alert-ticker-scroll {
+        display: inline-block;
+        white-space: nowrap;
+        animation: ticker-scroll 120s linear infinite;
+        padding-left: 100px;
+        color: #00ff88;
+        font-family: 'SF Mono', 'Courier New', monospace;
+        font-size: 0.85rem;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+    }
+    @keyframes ticker-scroll {
+        0%   { transform: translateX(0); }
+        100% { transform: translateX(-50%); }
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -470,6 +512,34 @@ if ohlcv.empty:
     )
     st.stop()
 
+# ---------------------------------------------------------------------------
+# Alert Ticker Bar — bullish accumulation signals (shown on all screens)
+# ---------------------------------------------------------------------------
+
+from src.screener_alert import screen_alert_ticker
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _cached_alert_ticker(_ohlcv_hash):
+    return screen_alert_ticker(ohlcv)
+
+_alert_df = _cached_alert_ticker(len(ohlcv))
+
+if not _alert_df.empty:
+    _ticker_items = " &nbsp;&nbsp;|&nbsp;&nbsp; ".join(
+        f"{r['Symbol']} ₹{r['Current Price']:,.2f} ▲{r['3D Change %']:.1f}%"
+        for _, r in _alert_df.iterrows()
+    )
+    # Duplicate content for seamless loop
+    _ticker_html = _ticker_items + " &nbsp;&nbsp;|&nbsp;&nbsp; " + _ticker_items
+    st.markdown(f"""<div class="alert-ticker-bar">
+        <div class="alert-ticker-label">ACCUMULATION</div>
+        <div class="alert-ticker-scroll">{_ticker_html}</div>
+    </div>""", unsafe_allow_html=True)
+    st.caption(
+        "Stocks with volume > 150% of 20-day avg (each of last 3 days) "
+        "+ close above 50 DMA + rising closes for 3 consecutive days. "
+        "% shown is the price change over the last 3 trading days."
+    )
 
 # ---------------------------------------------------------------------------
 # MAIN AREA — data only, based on selected screen

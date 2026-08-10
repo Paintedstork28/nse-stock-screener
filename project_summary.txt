@@ -90,7 +90,7 @@ Total cost: ₹0 — all data sources are free and publicly available.
 7. DEPLOYMENT
 -------------
 - GitHub repo: https://github.com/Paintedstork28/nse-stock-screener
-- Streamlit Cloud: deployed via share.streamlit.io (check dashboard for live URL)
+- Streamlit Cloud: https://paintedstork28-nse-stock-screener-app-cynubs.streamlit.app/
 - Local: streamlit run app.py (runs at http://localhost:8501)
 
 8. WHAT IT CAN BE USED FOR
@@ -140,6 +140,20 @@ Total cost: ₹0 — all data sources are free and publicly available.
 - Modified: src/indicators.py (+sharpe_ratio, +circuit_hits functions), app.py (+Sharpe Ratio screen)
 - Standalone theme-picker.html added for switching Streamlit theme (Light/Dark/Custom)
   - Generates .streamlit/config.toml content — user copies and restarts app
+
+13. ALERT TICKER BAR (Aug 2026)
+---------------------------------
+- Added a scrolling ticker bar at the top of the main area, visible on every screen
+- Highlights stocks showing a bullish accumulation pattern over the last 3 trading days
+- Criteria (all three must be true):
+  1. Volume > 150% of 20-day average volume on each of the last 3 days
+  2. Close > 50-day moving average on the latest day
+  3. Closing price rose day-over-day on each of the 3 days
+- Displays: SYMBOL ₹price ▲change% in a stock-ticker style scrolling bar
+- Dark background, green text, red "ACCUMULATION" label badge
+- Bar is hidden when no stocks qualify — no empty bar shown
+- New file: src/screener_alert.py (~60 lines)
+- Modified: app.py (ticker CSS + rendering above all screens)
 
 9. SUGGESTED NEXT STEPS
 ------------------------
