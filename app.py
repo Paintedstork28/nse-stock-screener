@@ -535,11 +535,17 @@ if not _alert_df.empty:
         <div class="alert-ticker-label">ACCUMULATION</div>
         <div class="alert-ticker-scroll">{_ticker_html}</div>
     </div>""", unsafe_allow_html=True)
-    st.caption(
-        "Stocks with volume > 150% of 20-day avg (each of last 3 days) "
-        "+ close above 50 DMA + rising closes for 3 consecutive days. "
-        "% shown is the price change over the last 3 trading days."
-    )
+    with st.expander(f"View all {len(_alert_df)} stocks in ticker"):
+        st.caption(
+            "Stocks with volume > 150% of 20-day avg (each of last 3 days) "
+            "+ close above 50 DMA + rising closes for 3 consecutive days. "
+            "% shown is the price change over the last 3 trading days."
+        )
+        _alert_display = _alert_df.copy()
+        _alert_display = enrich_with_info(_alert_display)
+        _alert_display = fmt_price_col(_alert_display, ["Current Price"])
+        _alert_display = fmt_pct_col(_alert_display, ["3D Change %"])
+        st.dataframe(_alert_display, width="stretch", hide_index=True)
 
 # ---------------------------------------------------------------------------
 # MAIN AREA — data only, based on selected screen
